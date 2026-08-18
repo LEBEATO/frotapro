@@ -12,11 +12,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// URL principal de produção na Vercel ou seu domínio final
-const siteUrl = "https://frotapro-git-main-lebeatos-projects.vercel.app";
+// URL principal de produção (Sem as tags de git-main do preview)
+const siteUrl = "https://frotapro.vercel.app";
 
 export const metadata: Metadata = {
-  // Define a URL base para que "/frotas.jpg" se transforme automaticamente em URL absoluta
   metadataBase: new URL(siteUrl),
   title: "FROTA PRO",
   description: "Controle de frota para empresas de transporte",
@@ -25,9 +24,10 @@ export const metadata: Metadata = {
     title: "FROTA PRO",
     description: "Controle de frota para empresas de transporte",
     siteName: "FROTA PRO",
+    url: siteUrl,
     images: [
       {
-        url: "/frotas.jpg", // A foto deve estar dentro da pasta 'public' (public/frotas.jpg)
+        url: `${siteUrl}/frotas.jpg`,
         width: 1200,
         height: 630,
         alt: "FROTA PRO - Gestão de Frotas",
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "FROTA PRO",
     description: "Controle de frota para empresas de transporte",
-    images: ["/frotas.jpg"],
+    images: [`${siteUrl}/frotas.jpg`],
   },
 
   icons: {
