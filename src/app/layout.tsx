@@ -19,11 +19,10 @@ export const metadata: Metadata = {
   openGraph: {
     title: "FROTA PRO",
     description: "Controle de frota para empresas de transporte",
-    url: "https://seudominio.com", // substitua pelo seu domínio
     siteName: "FROTA PRO",
     images: [
       {
-        url: "/og-image.png", // caminho relativo à pasta public
+        url: "/frotas.jpg", // Certifique-se de que frotas.jpg está na pasta 'public'
         width: 1200,
         height: 630,
         alt: "FROTA PRO - Gestão de Frotas",
@@ -37,9 +36,9 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "FROTA PRO",
     description: "Controle de frota para empresas de transporte",
-    images: ["/og-image.png"], // caminho relativo à pasta public
+    images: ["/frotas.jpg"], // Unificado para usar a mesma imagem de capa
   },
-  // Opcional: ícone e outros
+
   icons: {
     icon: "/favicon.ico",
   },

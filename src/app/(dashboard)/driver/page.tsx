@@ -225,24 +225,24 @@ export default function DriverPage() {
         <div className="flex justify-between items-center mb-6 bg-zinc-900 border border-zinc-800 p-4 rounded-2xl">
           <div>
             <h1 className="text-lg font-bold text-white flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-blue-500" /> Inspeção Pré-Viagem
+              <CheckCircle2 className="w-5 h-5 text-blue-500"/> Inspeção Pré-Viagem
             </h1>
             <p className="text-xs text-zinc-400">Verificação de Segurança Veicular</p>
           </div>
           <button type="button" onClick={handleLogout} className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl transition text-xs flex items-center gap-1">
-            <LogOut className="w-4 h-4" /> Sair
+            <LogOut className="w-4 h-4"/> Sair
           </button>
         </div>
 
         {loadingVehicle ? (
           <div className="mb-4 p-4 bg-zinc-900 border border-zinc-800 rounded-xl flex items-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+            <Loader2 className="w-5 h-5 animate-spin text-blue-500"/>
             <span className="text-sm text-zinc-400">Carregando dados do veículo...</span>
           </div>
         ) : vehicle ? (
           <div className="mb-4 p-4 bg-zinc-900 border border-blue-500/20 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Car className="w-5 h-5 text-blue-500" />
+              <Car className="w-5 h-5 text-blue-500"/>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                 <span className="font-semibold text-white">{vehicle.model}</span>
                 <span className="text-zinc-400">|</span>
@@ -260,19 +260,19 @@ export default function DriverPage() {
           </div>
         ) : (
           <div className="mb-4 p-4 bg-zinc-900 border border-amber-500/20 rounded-xl flex items-center gap-3 text-amber-400">
-            <AlertTriangle className="w-5 h-5" />
+            <AlertTriangle className="w-5 h-5"/>
             <span className="text-sm">Nenhum veículo atribuído a você. Entre em contato com o gestor.</span>
           </div>
         )}
 
         {successMsg && (
           <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-2xl text-sm font-medium flex items-center gap-2">
-            <Check className="w-5 h-5 shrink-0" /> {successMsg}
+            <Check className="w-5 h-5 shrink-0"/> {successMsg}
           </div>
         )}
         {errorMsg && (
           <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-400 rounded-2xl text-sm font-medium flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 shrink-0" /> {errorMsg}
+            <AlertTriangle className="w-5 h-5 shrink-0"/> {errorMsg}
           </div>
         )}
 
@@ -329,14 +329,15 @@ export default function DriverPage() {
             <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
               {photoPreviews.map((url, idx) => (
                 <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-zinc-700 group">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={url} alt={`Prévia ${idx}`} className="w-full h-full object-cover" />
                   <button type="button" onClick={() => removePhoto(idx)} className="absolute top-1 right-1 p-1 bg-red-600/80 text-white rounded-full hover:bg-red-600 transition">
-                    <X className="w-3.5 h-3.5" />
+                    <X className="w-3.5 h-3.5"/>
                   </button>
                 </div>
               ))}
               {photos.length < 5 && (
-                <label className="aspect-square rounded-xl border-2 border-dashed border-zinc-700 hover:border-blue-500 bg-zinc-800/40 flex flex-col items-center justify-center cursor-pointer transition p-2 text-center group"><Camera className="w-6 h-6 text-zinc-400 group-hover:text-blue-400 mb-1" />
+                <label className="aspect-square rounded-xl border-2 border-dashed border-zinc-700 hover:border-blue-500 bg-zinc-800/40 flex flex-col items-center justify-center cursor-pointer transition p-2 text-center group"><Camera className="w-6 h-6 text-zinc-400 group-hover:text-blue-400 mb-1"/>
                   <span className="text-[10px] text-zinc-400 font-medium">Tirar Foto</span>
                   <input type="file" accept="image/*" capture="environment" multiple onChange={handlePhotoSelect} className="hidden" />
                 </label>
@@ -350,7 +351,7 @@ export default function DriverPage() {
           </div>
 
           <button type="submit" disabled={!isValid || uploading} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition shadow-lg shadow-blue-600/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
-            {uploading ? <><Loader2 className="w-5 h-5 animate-spin" /><span>Enviando Dados e Fotos...</span></> : <span>Finalizar Inspeção</span>}
+            {uploading ? <><Loader2 className="w-5 h-5 animate-spin"/><span>Enviando Dados e Fotos...</span></> : <span>Finalizar Inspeção</span>}
           </button>
         </form>
       </div>
