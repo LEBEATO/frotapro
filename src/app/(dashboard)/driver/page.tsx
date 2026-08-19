@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { useForm, FieldPath } from 'react-hook-form'
+import { useForm, useWatch, FieldPath } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
@@ -84,12 +84,14 @@ export default function DriverPage() {
     handleSubmit,
     reset,
     setValue,
-    watch,
+    control,
     formState: { errors, isValid },
   } = useForm<ChecklistFormData>({
     resolver: zodResolver(checklistSchema),
     mode: 'onChange',
   })
+
+  const selectedItems = useWatch({ control, name: 'items' })
 
   useEffect(() => {
     async function fetchVehicle() {
@@ -391,7 +393,7 @@ export default function DriverPage() {
             <div className="space-y-2.5">
               {INSPECTION_ITEMS.map((item) => {
                 const fieldName = `items.${item.id}` as FieldPath<ChecklistFormData>
-                const selectedValue = watch(fieldName)
+                const selectedValue = selectedItems?.[item.id]
 
                 return (
                   <div
