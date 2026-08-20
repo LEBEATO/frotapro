@@ -12,8 +12,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// URL base da aplicação (sem a subrota /login para não quebrar os caminhos relativos)
-const siteUrl = "https://frotapro-git-main-lebeatos-projects.vercel.app";
+// Domínio correto usado no envio
+const siteUrl = "https://frotapro-zeta.vercel.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     url: siteUrl,
     images: [
       {
-        url: "/frotas.jpg", // O Next.js combina com metadataBase -> https://.../frotas.jpg
+        url: "https://frotapro-zeta.vercel.app/frotas.jpg", // URL Absoluta Direta
         width: 1200,
         height: 630,
         alt: "FROTA PRO - Gestão de Frotas",
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "FROTA PRO",
     description: "Controle de frota para empresas de transporte",
-    images: ["/frotas.jpg"],
+    images: ["https://frotapro-zeta.vercel.app/frotas.jpg"],
   },
 };
 
