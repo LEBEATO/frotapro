@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
+import { Toast, ToastType } from '@/components/Toast'
+import { ConfirmModal } from '@/components/ConfirmModal'
 import {
   ClipboardList,
   Search,
@@ -17,10 +19,10 @@ import {
   Loader2,
   RefreshCw,
   Mail,
-  Check,
   Wrench,
   ArrowLeft,
 } from 'lucide-react'
+
 
 interface ChecklistItem {
   name: string
@@ -48,6 +50,15 @@ export default function ManagerChecklistsPage() {
   const [filterIssues, setFilterIssues] = useState(false)
   const [selectedPhotos, setSelectedPhotos] = useState<string[] | null>(null)
   const [sendingMaintenance, setSendingMaintenance] = useState<string | null>(null)
+
+  // Estados dos Modais e Toasts
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null)
+  const [confirmResolve, setConfirmResolve] = useState<{
+    checklistId: string
+    vehiclePlate: string | null
+  } | null>(null)
+
+  // Atribuição de Veículo
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false)
   const [savingAssignment, setSavingAssignment] = useState(false)
   const [driverName, setDriverName] = useState('')
@@ -56,6 +67,10 @@ export default function ManagerChecklistsPage() {
   const [vehicleModel, setVehicleModel] = useState('')
 
   const supabase = createClient()
+
+  function showToast(message: string, type: ToastType = 'success') {
+    setToast({ message, type })
+  }
 
   function getChecklistItems(items: ChecklistItem[] | null) {
     return Array.isArray(items) ? items : []
@@ -81,17 +96,32 @@ export default function ManagerChecklistsPage() {
 
       if (error) {
         console.error('Erro detalhado do Supabase:', error)
-        alert(`Erro ao buscar checklists: ${error.message}`)
+        showToast(`Erro ao buscar checklists: ${error.message}`, 'error')
         return
       }
 
-      console.log('Checklists carregados do banco:', data)
-      setChecklists(data || [])
+      const latestByPlate = Object.values(
+        (data || []).reduce((acc: Record<string, Checklist>, current) => {
+          const plate = current.vehicle_plate || current.id
+          if (!acc[plate]) {
+            acc[plate] = current
+          }
+          return acc
+        }, {})
+      )
+
+      latestByPlate.sort((a, b) => {
+        if (a.has_issue === b.has_issue) {
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        }
+        return a.has_issue ? -1 : 1
+      })
+
+      setChecklists(latestByPlate)
     } catch (err: unknown) {
       console.error('Erro inesperado ao carregar checklists:', err)
-      if (err instanceof Error) {
-        alert(`Erro inesperado: ${err.message}`)
-      }
+      const msg = err instanceof Error ? err.message : 'Erro inesperado'
+      showToast(`Erro ao carregar checklists: ${msg}`, 'error')
     } finally {
       setLoading(false)
     }
@@ -101,47 +131,67 @@ export default function ManagerChecklistsPage() {
     fetchChecklists()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  async function handleResolveMaintenance(checklistId: string, vehiclePlate: string | null) {
-    if (!vehiclePlate) {
-      alert('Veículo sem placa informada.')
-      return
-    }
-    if (!confirm('Marcar esta manutenção como resolvida?')) return
-
+  async function executeResolveMaintenance(checklistId: string, vehiclePlate: string | null) {
     setSendingMaintenance(checklistId)
     try {
-      const { error: vehicleErr } = await supabase
-        .from('vehicles')
-        .update({ status: 'Ativo', issues: null })
-        .eq('plate', vehiclePlate)
-      if (vehicleErr) throw vehicleErr
+      const { data: current, error: fetchErr } = await supabase
+        .from('driver_checklists')
+        .select('*')
+        .eq('id', checklistId)
+        .single()
 
-      const { error: maintenanceErr } = await supabase
-        .from('maintenance_records')
-        .update({ status: 'completed' })
-        .eq('vehicle_plate', vehiclePlate)
-        .eq('status', 'pending')
-      if (maintenanceErr) throw maintenanceErr
+      if (fetchErr || !current) throw new Error('Checklist não encontrado.')
 
-      alert('Manutenção resolvida com sucesso! Status do veículo atualizado para "Ativo".')
+      const updatedItems = Array.isArray(current.items)
+        ? current.items.map((item: ChecklistItem) => ({
+            ...item,
+            ok: true,
+            value: item.value === 'NÃO' ? 'SIM' : item.value,
+          }))
+        : []
+
+      const { error: insertErr } = await supabase
+        .from('driver_checklists')
+        .insert({
+          id: crypto.randomUUID(),
+          driver: current.driver,
+          driver_email: current.driver_email,
+          vehicle_plate: current.vehicle_plate,
+          vehicle_model: current.vehicle_model,
+          items: updatedItems,
+          has_issue: false,
+          observation: 'Manutenção realizada e pendências resolvidas pelo gestor.',
+          photos: current.photos,
+        })
+
+      if (insertErr) {
+        showToast(`Erro ao salvar manutenção: ${insertErr.message}`, 'error')
+        return
+      }
+
+      if (vehiclePlate) {
+        await supabase
+          .from('vehicles')
+          .update({ status: 'Ativo', issues: null })
+          .ilike('plate', vehiclePlate.trim())
+      }
+
+      showToast('Manutenção marcada como resolvida!', 'success')
       await fetchChecklists()
     } catch (err: unknown) {
-      console.error('Erro ao resolver manutenção:', err)
-      if (err instanceof Error) {
-        alert(`Erro: ${err.message || 'Falha ao resolver manutenção.'}`)
-      } else {
-        alert('Falha ao resolver manutenção.')
-      }
+      console.error('Erro ao resolver:', err)
+      const msg = err instanceof Error ? err.message : 'Erro inesperado'
+      showToast(`Falha ao resolver manutenção: ${msg}`, 'error')
     } finally {
       setSendingMaintenance(null)
+      setConfirmResolve(null)
     }
   }
 
   async function handleAssignVehicle(e: React.FormEvent) {
     e.preventDefault()
     if (!driverName || !driverEmail || !vehiclePlate || !vehicleModel) {
-      alert('Por favor, preencha todos os campos.')
+      showToast('Por favor, preencha todos os campos.', 'info')
       return
     }
 
@@ -163,9 +213,10 @@ export default function ManagerChecklistsPage() {
         .from('vehicles')
         .update({ driver_name: driverName, driver_email: email })
         .eq('plate', plate)
+
       if (updateError) throw updateError
 
-      alert('Veículo atribuído com sucesso!')
+      showToast('Veículo atribuído com sucesso!', 'success')
       setIsAssignModalOpen(false)
       setDriverName('')
       setDriverEmail('')
@@ -174,11 +225,8 @@ export default function ManagerChecklistsPage() {
       await fetchChecklists()
     } catch (err: unknown) {
       console.error('Erro ao atribuir veículo:', err)
-      if (err instanceof Error) {
-        alert(`Erro: ${err.message || 'Falha ao atribuir veículo.'}`)
-      } else {
-        alert('Falha ao atribuir veículo.')
-      }
+      const msg = err instanceof Error ? err.message : 'Falha ao atribuir veículo.'
+      showToast(`Erro ao atribuir veículo: ${msg}`, 'error')
     } finally {
       setSavingAssignment(false)
     }
@@ -196,13 +244,11 @@ export default function ManagerChecklistsPage() {
     <div className="min-h-screen bg-zinc-950 text-white p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Cabeçalho */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-900 border border-zinc-800 p-6 rounded-2xl">
-          <div className="flex items-start gap-3">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-900 border border-zinc-800 p-6 rounded-2xl"><div className="flex items-start gap-3">
             <Link
               href="/admin"
               className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl transition"
               aria-label="Voltar ao painel do gestor"
-              title="Voltar ao painel do gestor"
             >
               <ArrowLeft className="w-4 h-4" />
             </Link>
@@ -216,6 +262,7 @@ export default function ManagerChecklistsPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+           
             <button
               onClick={fetchChecklists}
               disabled={loading}
@@ -235,7 +282,8 @@ export default function ManagerChecklistsPage() {
               placeholder="Buscar por placa ou motorista..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"/>
+              className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+            />
           </div>
           <button
             onClick={() => setFilterIssues(!filterIssues)}
@@ -249,7 +297,7 @@ export default function ManagerChecklistsPage() {
           </button>
         </div>
 
-        {/* Grid de Cards dos Motoristas */}
+        {/* Grid de Cards */}
         {loading ? (
           <div className="flex justify-center items-center py-20 text-zinc-500 gap-2">
             <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
@@ -270,8 +318,7 @@ export default function ManagerChecklistsPage() {
               return (
                 <div
                   key={item.id}
-                  className={`bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between space-y-4 transition hover:border-zinc-700 ${
-                    item.has_issue ? 'border-amber-500/30' : 'border-zinc-800'
+                  className={`bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between space-y-4 transition hover:border-zinc-700 ${item.has_issue ? 'border-amber-500/30' : 'border-zinc-800'
                   }`}
                 >
                   <div>
@@ -306,7 +353,8 @@ export default function ManagerChecklistsPage() {
 
                     <div className="bg-zinc-950/60 p-3 rounded-xl border border-zinc-800/60 mb-3 space-y-1.5">
                       <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
-                        Itens Checados</div>
+                        Itens Checados
+                      </div>
                       <div className="flex flex-wrap gap-1.5">
                         {checklistItems.map((check, idx) => (
                           <span
@@ -337,15 +385,13 @@ export default function ManagerChecklistsPage() {
                         </div>
                         <p className="text-amber-200/80 leading-relaxed">{item.observation}</p>
                       </div>
-                    )}
-
-                    {hasPendingMaintenance && (
+                    )}{hasPendingMaintenance && (
                       <div className="mt-3 p-2 bg-red-500/10 border border-red-500/20 rounded-xl">
                         <p className="text-xs text-red-400 font-medium flex items-center gap-1">
                           <AlertTriangle className="w-3.5 h-3.5" /> Pendências: {itensNaoOk.join(', ')}
                         </p>
                         <button
-                          onClick={() => handleResolveMaintenance(item.id, item.vehicle_plate)}
+                          onClick={() => setConfirmResolve({ checklistId: item.id, vehiclePlate: item.vehicle_plate })}
                           disabled={sendingMaintenance === item.id}
                           className="mt-2 w-full py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition disabled:opacity-50"
                         >
@@ -376,8 +422,8 @@ export default function ManagerChecklistsPage() {
         )}
       </div>
 
-      {/* Modal Atribuição */}
-      {isAssignModalOpen ? (
+      {/* Modal de Atribuição */}
+      {isAssignModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 relative space-y-5">
             <div className="flex justify-between items-center pb-3 border-b border-zinc-800">
@@ -388,7 +434,6 @@ export default function ManagerChecklistsPage() {
                 type="button"
                 onClick={() => setIsAssignModalOpen(false)}
                 className="p-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-lg transition"
-                aria-label="Fechar atribuição"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -411,8 +456,7 @@ export default function ManagerChecklistsPage() {
                   type="email"
                   required
                   placeholder="Ex: joao@empresa.com"
-                  value={driverEmail}
-                  onChange={(e) => setDriverEmail(e.target.value)}
+                  value={driverEmail}onChange={(e) => setDriverEmail(e.target.value)}
                   className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -440,59 +484,77 @@ export default function ManagerChecklistsPage() {
                   />
                 </div>
               </div>
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAssignModalOpen(false)}
-                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-medium transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingAssignment}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-50"
-                >
-                  {savingAssignment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                  Salvar Atribuição
-                </button>
-              </div>
+              <button
+                type="submit"
+                disabled={savingAssignment}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50"
+              >
+                {savingAssignment ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar Atribuição'}
+              </button>
             </form>
           </div>
         </div>
-      ) : null}
+      )}
 
+      {/* Modal Visualizador de Fotos */}
       {selectedPhotos && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-3xl w-full p-6 relative space-y-4">
-            <div className="flex justify-between items-center pb-3 border-b border-zinc-800">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-blue-400" /> Fotos Registradas na Inspeção
-              </h3>
-              <button
-                type="button"
-                onClick={() => setSelectedPhotos(null)}
-                className="p-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-lg transition"
-                aria-label="Fechar fotos"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto p-1">
-              {selectedPhotos.map((url, idx) => (
-                <a
-                  key={idx}
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="relative block h-48 w-full rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950"
-                >
-                  <Image src={url} alt={`Foto do checklist ${idx}`} fill className="object-cover" unoptimized />
-                </a>
-              ))}
-            </div>
-          </div>
-        </div>
+           <div className="flex justify-between items-center pb-3 border-b border-zinc-800">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+          <ImageIcon className="w-4 h-4 text-blue-400" /> Fotos Anexadas
+           </h3>
+        <button
+          onClick={() => setSelectedPhotos(null)}
+          className="p-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-lg transition"
+          >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto p-1">
+        {selectedPhotos.map((url, idx) => (
+          <a
+            key={idx}
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="relative aspect-video rounded-xl overflow-hidden border border-zinc-800 group bg-zinc-950 block"
+          >
+            <Image
+              src={url}
+              alt={`Foto ${idx + 1}`}
+              fill
+              sizes="(max-width: 640px) 100vw, 50vw"
+              className="object-cover transition duration-300 group-hover:scale-105"
+            />
+          </a>
+        ))}
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Componente Modal de Confirmação Reutilizável */}
+      <ConfirmModal
+        isOpen={!!confirmResolve}
+        title="Resolver Manutenção"
+        message="Deseja marcar todas as pendências deste veículo como resolvidas no sistema?"
+        loading={!!sendingMaintenance}
+        onConfirm={() => {
+          if (confirmResolve) {
+            executeResolveMaintenance(confirmResolve.checklistId, confirmResolve.vehiclePlate)
+          }
+        }}
+        onCancel={() => setConfirmResolve(null)}
+      />
+
+      {/* Componente Toast Reutilizável */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   )
