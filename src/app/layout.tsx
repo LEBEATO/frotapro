@@ -12,14 +12,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// URL principal de produção (Sem as tags de git-main do preview)
-const siteUrl = "https://frotapro.vercel.app";
+// URL base da aplicação (sem a subrota /login para não quebrar os caminhos relativos)
+const siteUrl = "https://frotapro-git-main-lebeatos-projects.vercel.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "FROTA PRO",
   description: "Controle de frota para empresas de transporte",
-  
+
   openGraph: {
     title: "FROTA PRO",
     description: "Controle de frota para empresas de transporte",
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     url: siteUrl,
     images: [
       {
-        url: `${siteUrl}/frotas.jpg`,
+        url: "/frotas.jpg", // O Next.js combina com metadataBase -> https://.../frotas.jpg
         width: 1200,
         height: 630,
         alt: "FROTA PRO - Gestão de Frotas",
@@ -36,16 +36,12 @@ export const metadata: Metadata = {
     locale: "pt_BR",
     type: "website",
   },
-  
+
   twitter: {
     card: "summary_large_image",
     title: "FROTA PRO",
     description: "Controle de frota para empresas de transporte",
-    images: [`${siteUrl}/frotas.jpg`],
-  },
-
-  icons: {
-    icon: "/favicon.ico",
+    images: ["/frotas.jpg"],
   },
 };
 

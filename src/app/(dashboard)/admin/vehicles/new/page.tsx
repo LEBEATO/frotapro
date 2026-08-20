@@ -58,7 +58,8 @@ export default function NewVehiclePage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto">
+    <div className="min-h-screen bg-[#121727] text-white ">
+    <div className="p-4 sm:p-6 lg:p-8  max-w-3xl mx-auto">
       <div className="flex items-center gap-4 mb-6">
         <Link href="/admin" className="p-2 bg-[#121727] hover:bg-slate-800 rounded-xl transition text-slate-300">
           <ArrowLeft className="w-5 h-5" />
@@ -116,5 +117,6 @@ export default function NewVehiclePage() {
         </button>
       </form>
     </div>
+   </div> 
   )
 }
