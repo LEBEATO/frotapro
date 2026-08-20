@@ -46,7 +46,7 @@ export default function NewVehiclePage() {
       reset()
       setTimeout(() => router.push('/admin'), 2000)
     } catch (err: unknown) {
-      // 🔥 CORREÇÃO: tipagem unknown em vez de any
+      //  CORREÇÃO: tipagem unknown em vez de any
       if (err instanceof Error) {
         setErrorMsg(err.message)
       } else {

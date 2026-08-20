@@ -23,7 +23,6 @@ import {
   ArrowLeft,
 } from 'lucide-react'
 
-
 interface ChecklistItem {
   name: string
   value?: 'SIM' | 'NÃO'
@@ -242,9 +241,32 @@ export default function ManagerChecklistsPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white p-4 md:p-8">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}{confirmResolve && (
+        <ConfirmModal
+          isOpen={!!confirmResolve}
+          title="Resolver Manutenção"
+          message="Deseja marcar todas as avarias deste veículo como resolvidas e atualizar o status para Ativo?"
+          loading={sendingMaintenance === confirmResolve.checklistId}
+          onConfirm={() =>
+            executeResolveMaintenance(
+              confirmResolve.checklistId,
+              confirmResolve.vehiclePlate
+            )
+          }
+          onCancel={() => setConfirmResolve(null)}
+        />
+      )}
+
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Cabeçalho */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-900 border border-zinc-800 p-6 rounded-2xl"><div className="flex items-start gap-3">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-900 border border-zinc-800 p-6 rounded-2xl">
+          <div className="flex items-start gap-3">
             <Link
               href="/admin"
               className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl transition"
@@ -262,7 +284,12 @@ export default function ManagerChecklistsPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-           
+            <button
+              onClick={() => setIsAssignModalOpen(true)}
+              className="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition text-xs font-semibold flex items-center gap-2"
+            >
+              <Car className="w-4 h-4" /> Atribuir Veículo
+            </button>
             <button
               onClick={fetchChecklists}
               disabled={loading}
@@ -304,8 +331,7 @@ export default function ManagerChecklistsPage() {
             <span>Carregando histórico...</span>
           </div>
         ) : filteredChecklists.length === 0 ? (
-          <div className="text-center py-16 bg-zinc-900/50 border border-zinc-800/80 rounded-2xl">
-            <p className="text-zinc-400 text-sm">Nenhum checklist encontrado com esses filtros.</p>
+          <div className="text-center py-16 bg-zinc-900/50 border border-zinc-800/80 rounded-2xl"><p className="text-zinc-400 text-sm">Nenhum checklist encontrado com esses filtros.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -318,7 +344,8 @@ export default function ManagerChecklistsPage() {
               return (
                 <div
                   key={item.id}
-                  className={`bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between space-y-4 transition hover:border-zinc-700 ${item.has_issue ? 'border-amber-500/30' : 'border-zinc-800'
+                  className={`bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between space-y-4 transition hover:border-zinc-700 ${
+                    item.has_issue ? 'border-amber-500/30' : 'border-zinc-800'
                   }`}
                 >
                   <div>
@@ -376,16 +403,16 @@ export default function ManagerChecklistsPage() {
                       <div className="mb-3 px-3 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-300">
                         <span className="font-semibold">KM registrado:</span> {getRecordedMileage(item.observation)}
                       </div>
-                    )}
-
-                    {item.observation && (
+                    )}{item.observation && (
                       <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-xl text-xs space-y-1">
                         <div className="font-semibold flex items-center gap-1">
                           <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> Observação do Motorista:
                         </div>
                         <p className="text-amber-200/80 leading-relaxed">{item.observation}</p>
                       </div>
-                    )}{hasPendingMaintenance && (
+                    )}
+
+                    {hasPendingMaintenance && (
                       <div className="mt-3 p-2 bg-red-500/10 border border-red-500/20 rounded-xl">
                         <p className="text-xs text-red-400 font-medium flex items-center gap-1">
                           <AlertTriangle className="w-3.5 h-3.5" /> Pendências: {itensNaoOk.join(', ')}
@@ -420,10 +447,8 @@ export default function ManagerChecklistsPage() {
             })}
           </div>
         )}
-      </div>
-
-      {/* Modal de Atribuição */}
-      {isAssignModalOpen && (
+        {/* Modal de Atribuição */}
+       {isAssignModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 relative space-y-5">
             <div className="flex justify-between items-center pb-3 border-b border-zinc-800">
@@ -456,7 +481,8 @@ export default function ManagerChecklistsPage() {
                   type="email"
                   required
                   placeholder="Ex: joao@empresa.com"
-                  value={driverEmail}onChange={(e) => setDriverEmail(e.target.value)}
+                  value={driverEmail}
+                  onChange={(e) => setDriverEmail(e.target.value)}
                   className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -477,85 +503,65 @@ export default function ManagerChecklistsPage() {
                   <input
                     type="text"
                     required
-                    placeholder="Ex: Fiorino"
+                    placeholder="Ex: Volvo FH 540"
                     value={vehicleModel}
                     onChange={(e) => setVehicleModel(e.target.value)}
                     className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
                   />
                 </div>
               </div>
-              <button
-                type="submit"
-                disabled={savingAssignment}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50"
-              >
-                {savingAssignment ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar Atribuição'}
-              </button>
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAssignModalOpen(false)}
+                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-medium transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingAssignment}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 transition disabled:opacity-50"
+                >
+                  {savingAssignment && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Atribuir
+                </button>
+              </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Modal Visualizador de Fotos */}
+      {/* Modal de Visualização de Fotos */}
       {selectedPhotos && (
         <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-3xl w-full p-6 relative space-y-4">
-           <div className="flex justify-between items-center pb-3 border-b border-zinc-800">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-          <ImageIcon className="w-4 h-4 text-blue-400" /> Fotos Anexadas
-           </h3>
-        <button
-          onClick={() => setSelectedPhotos(null)}
-          className="p-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-lg transition"
-          >
-          <X className="w-5 h-5" />
-        </button>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto p-1">
-        {selectedPhotos.map((url, idx) => (
-          <a
-            key={idx}
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            className="relative aspect-video rounded-xl overflow-hidden border border-zinc-800 group bg-zinc-950 block"
-          >
-            <Image
-              src={url}
-              alt={`Foto ${idx + 1}`}
-              fill
-              sizes="(max-width: 640px) 100vw, 50vw"
-              className="object-cover transition duration-300 group-hover:scale-105"
-            />
-          </a>
-        ))}
-      </div>
-    </div>
-  </div>
-)}
-
-{/* Componente Modal de Confirmação Reutilizável */}
-      <ConfirmModal
-        isOpen={!!confirmResolve}
-        title="Resolver Manutenção"
-        message="Deseja marcar todas as pendências deste veículo como resolvidas no sistema?"
-        loading={!!sendingMaintenance}
-        onConfirm={() => {
-          if (confirmResolve) {
-            executeResolveMaintenance(confirmResolve.checklistId, confirmResolve.vehiclePlate)
-          }
-        }}
-        onCancel={() => setConfirmResolve(null)}
-      />
-
-      {/* Componente Toast Reutilizável */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
+          <div className="max-w-4xl w-full max-h-[90vh] overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative">
+            <button
+              onClick={() => setSelectedPhotos(null)}
+              className="absolute top-4 right-4 p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+              <ImageIcon className="w-4 h-4 text-blue-500" /> Anexos do Checklist
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {selectedPhotos.map((photoUrl, idx) => (
+                <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950">
+                  <Image
+                    src={photoUrl}
+                    alt={`Foto ${idx + 1}`}
+                    fill
+                    className="object-cover"
+                 
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
+      </div>
     </div>
   )
 }
