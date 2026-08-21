@@ -108,7 +108,7 @@ export default function NewVehiclePage() {
           </div>
           <div className="md:col-span-2">
             <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Senha Provisória *</label>
-            <input {...register('password')} type="password" placeholder="Mínimo 6 caracteres" className="w-full px-4 py-2.5 bg-[#0B0E17] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
+            <input {...register('password')} type="password" placeholder="Mínimo 8 caracteres" className="w-full px-4 py-2.5 bg-[#0B0E17] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
             {errors.password && <p className="text-xs text-red-400 mt-1">{errors.password.message}</p>}
           </div>
         </div>

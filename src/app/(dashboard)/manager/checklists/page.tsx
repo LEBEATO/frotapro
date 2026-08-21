@@ -57,14 +57,6 @@ export default function ManagerChecklistsPage() {
     vehiclePlate: string | null
   } | null>(null)
 
-  // Atribuição de Veículo
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false)
-  const [savingAssignment, setSavingAssignment] = useState(false)
-  const [driverName, setDriverName] = useState('')
-  const [driverEmail, setDriverEmail] = useState('')
-  const [vehiclePlate, setVehiclePlate] = useState('')
-  const [vehicleModel, setVehicleModel] = useState('')
-
   const supabase = createClient()
 
   function showToast(message: string, type: ToastType = 'success') {
@@ -130,6 +122,7 @@ export default function ManagerChecklistsPage() {
     fetchChecklists()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
   async function executeResolveMaintenance(checklistId: string, vehiclePlate: string | null) {
     setSendingMaintenance(checklistId)
     try {
@@ -148,8 +141,7 @@ export default function ManagerChecklistsPage() {
             value: item.value === 'NÃO' ? 'SIM' : item.value,
           }))
         : []
-
-      const { error: insertErr } = await supabase
+        const { error: insertErr } = await supabase
         .from('driver_checklists')
         .insert({
           id: crypto.randomUUID(),
@@ -187,55 +179,20 @@ export default function ManagerChecklistsPage() {
     }
   }
 
-  async function handleAssignVehicle(e: React.FormEvent) {
-    e.preventDefault()
-    if (!driverName || !driverEmail || !vehiclePlate || !vehicleModel) {
-      showToast('Por favor, preencha todos os campos.', 'info')
-      return
-    }
-
-    setSavingAssignment(true)
-    try {
-      const plate = vehiclePlate.toUpperCase().trim()
-      const email = driverEmail.toLowerCase().trim()
-      const { data: existingVehicle, error: findError } = await supabase
-        .from('vehicles')
-        .select('id')
-        .eq('plate', plate)
-        .single()
-
-      if (findError || !existingVehicle) {
-        throw new Error(`Veículo com placa "${plate}" não encontrado.`)
-      }
-
-      const { error: updateError } = await supabase
-        .from('vehicles')
-        .update({ driver_name: driverName, driver_email: email })
-        .eq('plate', plate)
-
-      if (updateError) throw updateError
-
-      showToast('Veículo atribuído com sucesso!', 'success')
-      setIsAssignModalOpen(false)
-      setDriverName('')
-      setDriverEmail('')
-      setVehiclePlate('')
-      setVehicleModel('')
-      await fetchChecklists()
-    } catch (err: unknown) {
-      console.error('Erro ao atribuir veículo:', err)
-      const msg = err instanceof Error ? err.message : 'Falha ao atribuir veículo.'
-      showToast(`Erro ao atribuir veículo: ${msg}`, 'error')
-    } finally {
-      setSavingAssignment(false)
-    }
-  }
-
-  const filteredChecklists = checklists.filter((item) => {
+ const filteredChecklists = checklists.filter((item) => {
     const matchesSearch =
       (item.vehicle_plate || '').toLowerCase().includes(search.toLowerCase()) ||
       (item.driver || '').toLowerCase().includes(search.toLowerCase())
-    if (filterIssues) return matchesSearch && item.has_issue
+
+    if (filterIssues) {
+      // Checa se a propriedade 'has_issue' é true
+      // OU se existe algum item dentro da lista de checagem com 'ok === false'
+      const checklistItems = getChecklistItems(item.items)
+      const hasItemWithIssue = checklistItems.some((i) => !i.ok)
+
+      return matchesSearch && (item.has_issue || hasItemWithIssue)
+    }
+
     return matchesSearch
   })
 
@@ -247,7 +204,8 @@ export default function ManagerChecklistsPage() {
           type={toast.type}
           onClose={() => setToast(null)}
         />
-      )}{confirmResolve && (
+      )}
+      {confirmResolve && (
         <ConfirmModal
           isOpen={!!confirmResolve}
           title="Resolver Manutenção"
@@ -263,7 +221,38 @@ export default function ManagerChecklistsPage() {
         />
       )}
 
-      <div className="max-w-6xl mx-auto space-y-6">
+      {/* Modal de Fotos */}
+      {selectedPhotos && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-3xl w-full p-6 relative space-y-4">
+            <div className="flex justify-between items-center pb-3 border-b border-zinc-800">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-blue-400" /> Fotos Anexadas
+              </h3>
+              <button
+                type="button"
+                onClick={() => setSelectedPhotos(null)}
+                className="p-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto pr-1">
+              {selectedPhotos.map((photoUrl, idx) => (
+                <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-zinc-800 bg-black">
+                  <Image
+                    src={photoUrl}
+                    alt={`Foto ${idx + 1}`}
+                    fill
+                    className="object-contain"
+                    unoptimized
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}<div className="max-w-6xl mx-auto space-y-6">
         {/* Cabeçalho */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-900 border border-zinc-800 p-6 rounded-2xl">
           <div className="flex items-start gap-3">
@@ -284,12 +273,6 @@ export default function ManagerChecklistsPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsAssignModalOpen(true)}
-              className="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition text-xs font-semibold flex items-center gap-2"
-            >
-              <Car className="w-4 h-4" /> Atribuir Veículo
-            </button>
             <button
               onClick={fetchChecklists}
               disabled={loading}
@@ -320,7 +303,7 @@ export default function ManagerChecklistsPage() {
                 : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
             }`}
           >
-            <AlertTriangle className="w-4 h-4" /> Apenas com Avarias/Problemas
+            <AlertTriangle className="w-4 h-4" /> Apenas com Avarias
           </button>
         </div>
 
@@ -331,7 +314,8 @@ export default function ManagerChecklistsPage() {
             <span>Carregando histórico...</span>
           </div>
         ) : filteredChecklists.length === 0 ? (
-          <div className="text-center py-16 bg-zinc-900/50 border border-zinc-800/80 rounded-2xl"><p className="text-zinc-400 text-sm">Nenhum checklist encontrado com esses filtros.</p>
+          <div className="text-center py-16 bg-zinc-900/50 border border-zinc-800/80 rounded-2xl">
+            <p className="text-zinc-400 text-sm">Nenhum checklist encontrado com esses filtros.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -344,8 +328,7 @@ export default function ManagerChecklistsPage() {
               return (
                 <div
                   key={item.id}
-                  className={`bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between space-y-4 transition hover:border-zinc-700 ${
-                    item.has_issue ? 'border-amber-500/30' : 'border-zinc-800'
+                  className={`bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between space-y-4 transition hover:border-zinc-700 ${item.has_issue ? 'border-amber-500/30' : 'border-zinc-800'
                   }`}
                 >
                   <div>
@@ -403,16 +386,16 @@ export default function ManagerChecklistsPage() {
                       <div className="mb-3 px-3 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-300">
                         <span className="font-semibold">KM registrado:</span> {getRecordedMileage(item.observation)}
                       </div>
-                    )}{item.observation && (
+                    )}
+
+                    {item.observation && (
                       <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-xl text-xs space-y-1">
                         <div className="font-semibold flex items-center gap-1">
                           <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> Observação do Motorista:
                         </div>
                         <p className="text-amber-200/80 leading-relaxed">{item.observation}</p>
                       </div>
-                    )}
-
-                    {hasPendingMaintenance && (
+                    )}{hasPendingMaintenance && (
                       <div className="mt-3 p-2 bg-red-500/10 border border-red-500/20 rounded-xl">
                         <p className="text-xs text-red-400 font-medium flex items-center gap-1">
                           <AlertTriangle className="w-3.5 h-3.5" /> Pendências: {itensNaoOk.join(', ')}
@@ -447,120 +430,6 @@ export default function ManagerChecklistsPage() {
             })}
           </div>
         )}
-        {/* Modal de Atribuição */}
-       {isAssignModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 relative space-y-5">
-            <div className="flex justify-between items-center pb-3 border-b border-zinc-800">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Car className="w-4 h-4 text-blue-500" /> Atribuir Veículo a Motorista
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsAssignModalOpen(false)}
-                className="p-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-lg transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleAssignVehicle} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 mb-1">Nome do Motorista</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: João Silva"
-                  value={driverName}
-                  onChange={(e) => setDriverName(e.target.value)}
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 mb-1">E-mail do Motorista</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="Ex: joao@empresa.com"
-                  value={driverEmail}
-                  onChange={(e) => setDriverEmail(e.target.value)}
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-400 mb-1">Placa do Veículo</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="ABC-1234"
-                    value={vehiclePlate}
-                    onChange={(e) => setVehiclePlate(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white uppercase placeholder-zinc-500 focus:outline-none focus:border-blue-500 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-400 mb-1">Modelo</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Volvo FH 540"
-                    value={vehicleModel}
-                    onChange={(e) => setVehicleModel(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAssignModalOpen(false)}
-                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-medium transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingAssignment}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 transition disabled:opacity-50"
-                >
-                  {savingAssignment && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  Atribuir
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Visualização de Fotos */}
-      {selectedPhotos && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="max-w-4xl w-full max-h-[90vh] overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative">
-            <button
-              onClick={() => setSelectedPhotos(null)}
-              className="absolute top-4 right-4 p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl transition"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-              <ImageIcon className="w-4 h-4 text-blue-500" /> Anexos do Checklist
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {selectedPhotos.map((photoUrl, idx) => (
-                <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950">
-                  <Image
-                    src={photoUrl}
-                    alt={`Foto ${idx + 1}`}
-                    fill
-                    className="object-cover"
-                 
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
       </div>
     </div>
   )
