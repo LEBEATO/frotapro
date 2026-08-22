@@ -31,7 +31,7 @@ export async function createVehicleAndDriver(formData: VehicleFormData) {
           full_name: formData.driver_name,
           role: 'driver',
         },
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'https://frotapro-zeta.vercel.app'}/definir-senha`,
+        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'https://frotapro-zeta.vercel.app'}/auth/callback?next=/reset-password`,
       }
     )
 
