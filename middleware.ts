@@ -24,13 +24,17 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const url = request.nextUrl.clone()
 
-  // Se NÃO estiver logado e tentar acessar rotas protegidas -> vai para /login
-  if (!user && !url.pathname.startsWith('/login')) {
+  // PERMITE ACESSO PÚBLICO ÀS ROTAS DE AUTENTICAÇÃO
+  if (
+    !user &&
+    !url.pathname.startsWith('/login') &&
+    !url.pathname.startsWith('/reset-password') &&
+    !url.pathname.startsWith('/auth/callback')
+  ) {
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // Se ESTIVER logado
   if (user) {
     const { data: profile } = await supabase
       .from('profiles')
@@ -40,7 +44,7 @@ export async function middleware(request: NextRequest) {
 
     const role = profile?.role ?? 'driver'
 
-    // CORREÇÃO: substituir espaços por || (OU lógico)
+    //  CORREÇÃO: operadores || em vez de espaço
     const isGestor = role === 'admin' || role === 'gestor' || role === 'manager'
     const isMecanico = role === 'mechanic' || role === 'mecanico'
 
@@ -48,19 +52,17 @@ export async function middleware(request: NextRequest) {
     if (isGestor) userHome = '/admin'
     if (isMecanico) userHome = '/mechanic'
 
-    // Se estiver na tela de login e já autenticado -> manda para o painel
     if (url.pathname.startsWith('/login')) {
       url.pathname = userHome
       return NextResponse.redirect(url)
     }
 
-    // Protege rotas de admin
+    //  CORREÇÃO: operadores ||
     if ((url.pathname.startsWith('/admin') || url.pathname.startsWith('/manager')) && !isGestor) {
       url.pathname = userHome
       return NextResponse.redirect(url)
     }
 
-    // Protege rotas de mecânico
     if (url.pathname.startsWith('/mechanic') && !isMecanico && !isGestor) {
       url.pathname = userHome
       return NextResponse.redirect(url)
@@ -73,6 +75,8 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     '/login',
+    '/reset-password',
+    '/auth/callback',
     '/admin/:path*',
     '/manager/:path*',
     '/driver/:path*',

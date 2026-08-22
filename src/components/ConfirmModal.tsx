@@ -6,7 +6,9 @@ interface ConfirmModalProps {
   isOpen: boolean
   title: string
   message: string
-  loading?: boolean
+  confirmText?: string   //  ADICIONADO
+  cancelText?: string    //  ADICIONADO
+  isLoading?: boolean    //  ADICIONADO (renomeado de loading)
   onConfirm: () => void
   onCancel: () => void
 }
@@ -15,7 +17,9 @@ export function ConfirmModal({
   isOpen,
   title,
   message,
-  loading = false,
+  confirmText = 'Confirmar',
+  cancelText = 'Cancelar',
+  isLoading = false,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
@@ -38,18 +42,18 @@ export function ConfirmModal({
           <button
             type="button"
             onClick={onCancel}
-            disabled={loading}
+            disabled={isLoading}
             className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-medium transition disabled:opacity-50"
           >
-            Cancelar
+            {cancelText}
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            disabled={loading}
+            disabled={isLoading}
             className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-50"
           >
-            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Confirmar'}
+            {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : confirmText}
           </button>
         </div>
       </div>

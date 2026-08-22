@@ -11,8 +11,7 @@ export const vehicleSchema = z.object({
   year: z.string().min(4, 'Ano inválido'),
   driver_name: z.string().min(2, 'Nome do motorista é obrigatório'),
   driver_email: z.string().email('E-mail do motorista inválido'),
-  password: z.string().min(6, 'Senha provisória deve ter no mínimo 6 caracteres'),
+  password: z.string().optional(), //  AGORA OPCIONAL
 })
 
-// ... outros schemas
 export type VehicleFormData = z.infer<typeof vehicleSchema>

@@ -50,7 +50,6 @@ export default function ManagerChecklistsPage() {
   const [selectedPhotos, setSelectedPhotos] = useState<string[] | null>(null)
   const [sendingMaintenance, setSendingMaintenance] = useState<string | null>(null)
 
-  // Estados dos Modais e Toasts
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null)
   const [confirmResolve, setConfirmResolve] = useState<{
     checklistId: string
@@ -179,17 +178,14 @@ export default function ManagerChecklistsPage() {
     }
   }
 
- const filteredChecklists = checklists.filter((item) => {
+  const filteredChecklists = checklists.filter((item) => {
     const matchesSearch =
       (item.vehicle_plate || '').toLowerCase().includes(search.toLowerCase()) ||
       (item.driver || '').toLowerCase().includes(search.toLowerCase())
 
     if (filterIssues) {
-      // Checa se a propriedade 'has_issue' é true
-      // OU se existe algum item dentro da lista de checagem com 'ok === false'
       const checklistItems = getChecklistItems(item.items)
       const hasItemWithIssue = checklistItems.some((i) => !i.ok)
-
       return matchesSearch && (item.has_issue || hasItemWithIssue)
     }
 
@@ -210,7 +206,9 @@ export default function ManagerChecklistsPage() {
           isOpen={!!confirmResolve}
           title="Resolver Manutenção"
           message="Deseja marcar todas as avarias deste veículo como resolvidas e atualizar o status para Ativo?"
-          loading={sendingMaintenance === confirmResolve.checklistId}
+          isLoading={sendingMaintenance === confirmResolve.checklistId}
+          confirmText="Confirmar"
+          cancelText="Cancelar"
           onConfirm={() =>
             executeResolveMaintenance(
               confirmResolve.checklistId,
@@ -252,7 +250,8 @@ export default function ManagerChecklistsPage() {
             </div>
           </div>
         </div>
-      )}<div className="max-w-6xl mx-auto space-y-6">
+      )}
+      <div className="max-w-6xl mx-auto space-y-6">
         {/* Cabeçalho */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-900 border border-zinc-800 p-6 rounded-2xl">
           <div className="flex items-start gap-3">

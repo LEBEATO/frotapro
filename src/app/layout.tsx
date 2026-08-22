@@ -12,14 +12,12 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Domínio correto usado no envio
-const siteUrl = "https://frotapro-zeta.vercel.app";
+const siteUrl = "https://frotapro.vercel.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "FROTA PRO",
   description: "Controle de frota para empresas de transporte",
-
   openGraph: {
     title: "FROTA PRO",
     description: "Controle de frota para empresas de transporte",
@@ -27,7 +25,7 @@ export const metadata: Metadata = {
     url: siteUrl,
     images: [
       {
-        url: "https://frotapro-zeta.vercel.app/frotas.jpg", // URL Absoluta Direta
+        url: `${siteUrl}/og-image.png`, 
         width: 1200,
         height: 630,
         alt: "FROTA PRO - Gestão de Frotas",
@@ -36,12 +34,14 @@ export const metadata: Metadata = {
     locale: "pt_BR",
     type: "website",
   },
-
   twitter: {
     card: "summary_large_image",
     title: "FROTA PRO",
     description: "Controle de frota para empresas de transporte",
-    images: ["https://frotapro-zeta.vercel.app/frotas.jpg"],
+    images: [`${siteUrl}/og-image.png`],
+  },
+  icons: {
+    icon: "/favicon.ico",
   },
 };
 
@@ -53,7 +53,7 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} 
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

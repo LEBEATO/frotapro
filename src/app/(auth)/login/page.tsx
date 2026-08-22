@@ -37,7 +37,6 @@ export default function LoginPage() {
         .eq('id', data.user.id)
         .single()
 
-      // CORREÇÃO: operador || em vez de espaço
       if (profileError || !profile || !profile.role) {
         await supabase.auth.signOut()
         throw new Error('Perfil não encontrado ou sem permissão atribuída.')
@@ -45,7 +44,6 @@ export default function LoginPage() {
 
       const role = profile.role as Role
 
-      // CORREÇÃO: operador || em vez de espaço
       if (role === 'gestor' || role === 'admin') {
         router.push('/admin')
       } else if (role === 'mecanico' || role === 'mechanic') {
@@ -67,7 +65,6 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-4 relative overflow-hidden">
-      {/* Luzes de fundo */}
       <div className="absolute -top-40 -left-40 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-40 -right-40 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -100,8 +97,8 @@ export default function LoginPage() {
                 required
               />
             </div>
-          </div><div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Senha</label>
+          </div>
+          <div className="space-y-1.5"><label className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Senha</label>
             <div className="relative">
               <KeyRound className="absolute left-3.5 top-3.5 w-5 h-5 text-zinc-500" />
               <input

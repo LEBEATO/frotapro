@@ -28,7 +28,7 @@ export default function NewVehiclePage() {
       year: '',
       driver_name: '',
       driver_email: '',
-      password: '',
+      password: '', // mantido mas não usado
     },
   })
 
@@ -42,11 +42,10 @@ export default function NewVehiclePage() {
       if (!result.success) {
         throw new Error(result.error || 'Erro ao cadastrar')
       }
-      setSuccessMsg('Veículo e motorista cadastrados com sucesso!')
+      setSuccessMsg(result.message || 'Veículo e motorista cadastrados com sucesso!')
       reset()
-      setTimeout(() => router.push('/admin'), 2000)
+      setTimeout(() => router.push('/admin'), 3000)
     } catch (err: unknown) {
-      //  CORREÇÃO: tipagem unknown em vez de any
       if (err instanceof Error) {
         setErrorMsg(err.message)
       } else {
@@ -58,65 +57,63 @@ export default function NewVehiclePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#121727] text-white ">
-    <div className="p-4 sm:p-6 lg:p-8  max-w-3xl mx-auto">
-      <div className="flex items-center gap-4 mb-6">
-        <Link href="/admin" className="p-2 bg-[#121727] hover:bg-slate-800 rounded-xl transition text-slate-300">
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Truck className="w-6 h-6 text-indigo-400" />
-            Novo Veículo
-          </h1>
-          <p className="text-sm text-slate-400">Cadastre um automóvel e vincule ao motorista</p>
+    <div className="min-h-screen bg-[#121727] text-white">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto">
+        <div className="flex items-center gap-4 mb-6">
+          <Link href="/admin" className="p-2 bg-[#121727] hover:bg-slate-800 rounded-xl transition text-slate-300">
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+              <Truck className="w-6 h-6 text-indigo-400" />
+              Novo Veículo
+            </h1>
+            <p className="text-sm text-slate-400">Cadastre um automóvel e vincule ao motorista</p>
+          </div>
         </div>
+
+        {errorMsg && <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-sm">{errorMsg}</div>}
+        {successMsg && <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl text-sm">{successMsg}</div>}
+
+        <form onSubmit={handleSubmit(onSubmit)} className="bg-[#121727] border border-slate-800/80 rounded-2xl p-6 space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Modelo *</label>
+              <input {...register('model')} placeholder="Ex: Fiorino" className="w-full px-4 py-2.5 bg-[#0B0E17] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
+              {errors.model && <p className="text-xs text-red-400 mt-1">{errors.model.message}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Placa *</label>
+              <input {...register('plate')} placeholder="ABC-1234" className="w-full px-4 py-2.5 bg-[#0B0E17] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 uppercase" />
+              {errors.plate && <p className="text-xs text-red-400 mt-1">{errors.plate.message}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Ano *</label><input {...register('year')} placeholder="2024" className="w-full px-4 py-2.5 bg-[#0B0E17] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
+              {errors.year && <p className="text-xs text-red-400 mt-1">{errors.year.message}</p>}
+            </div>
+          </div>
+          <div className="border-t border-slate-800/60 my-4"></div>
+          <h3 className="text-sm font-semibold text-slate-300">Dados do Motorista</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Nome Completo *</label>
+              <input {...register('driver_name')} placeholder="João Silva" className="w-full px-4 py-2.5 bg-[#0B0E17] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
+              {errors.driver_name && <p className="text-xs text-red-400 mt-1">{errors.driver_name.message}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">E-mail *</label>
+              <input {...register('driver_email')} type="email" placeholder="joao@empresa.com" className="w-full px-4 py-2.5 bg-[#0B0E17] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
+              {errors.driver_email && <p className="text-xs text-red-400 mt-1">{errors.driver_email.message}</p>}
+            </div>
+          </div>
+
+          {/* ❌ CAMPO DE SENHA REMOVIDO — o motorista define a própria senha no convite */}
+
+          <button type="submit" disabled={loading} className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition shadow-lg shadow-indigo-600/20 disabled:opacity-50 flex items-center justify-center gap-2">
+            {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Cadastrando...</> : 'Cadastrar Veículo e Enviar Convite'}
+          </button>
+        </form>
       </div>
-
-      {errorMsg && <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-sm">{errorMsg}</div>}
-      {successMsg && <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl text-sm">{successMsg}</div>}
-
-      <form onSubmit={handleSubmit(onSubmit)} className="bg-[#121727] border border-slate-800/80 rounded-2xl p-6 space-y-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Modelo *</label>
-            <input {...register('model')} placeholder="Ex: Fiorino" className="w-full px-4 py-2.5 bg-[#0B0E17] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
-            {errors.model && <p className="text-xs text-red-400 mt-1">{errors.model.message}</p>}
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Placa *</label>
-            <input {...register('plate')} placeholder="ABC-1234" className="w-full px-4 py-2.5 bg-[#0B0E17] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 uppercase" />
-            {errors.plate && <p className="text-xs text-red-400 mt-1">{errors.plate.message}</p>}
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Ano *</label>
-            <input {...register('year')} placeholder="2024" className="w-full px-4 py-2.5 bg-[#0B0E17] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />{errors.year && <p className="text-xs text-red-400 mt-1">{errors.year.message}</p>}
-          </div>
-        </div>
-        <div className="border-t border-slate-800/60 my-4"></div>
-        <h3 className="text-sm font-semibold text-slate-300">Dados do Motorista</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Nome Completo *</label>
-            <input {...register('driver_name')} placeholder="João Silva" className="w-full px-4 py-2.5 bg-[#0B0E17] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
-            {errors.driver_name && <p className="text-xs text-red-400 mt-1">{errors.driver_name.message}</p>}
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">E-mail *</label>
-            <input {...register('driver_email')} type="email" placeholder="joao@empresa.com" className="w-full px-4 py-2.5 bg-[#0B0E17] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
-            {errors.driver_email && <p className="text-xs text-red-400 mt-1">{errors.driver_email.message}</p>}
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Senha Provisória *</label>
-            <input {...register('password')} type="password" placeholder="Mínimo 8 caracteres" className="w-full px-4 py-2.5 bg-[#0B0E17] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
-            {errors.password && <p className="text-xs text-red-400 mt-1">{errors.password.message}</p>}
-          </div>
-        </div>
-        <button type="submit" disabled={loading} className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition shadow-lg shadow-indigo-600/20 disabled:opacity-50 flex items-center justify-center gap-2">
-          {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Cadastrando...</> : 'Cadastrar Veículo e Motorista'}
-        </button>
-      </form>
     </div>
-   </div> 
   )
 }
