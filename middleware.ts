@@ -9,7 +9,9 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() { return request.cookies.getAll() },
+        getAll() {
+          return request.cookies.getAll()
+        },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
@@ -24,7 +26,7 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const url = request.nextUrl.clone()
 
-  // PERMITE ACESSO PÚBLICO ÀS ROTAS DE AUTENTICAÇÃO
+  // 1. PERMITE ACESSO PÚBLICO ÀS ROTAS DE AUTENTICAÇÃO
   if (
     !user &&
     !url.pathname.startsWith('/login') &&
@@ -33,6 +35,12 @@ export async function middleware(request: NextRequest) {
   ) {
     url.pathname = '/login'
     return NextResponse.redirect(url)
+  }
+
+  // 2. ISENÇÃO: Se o usuário estiver acessando a redefinição de senha ou o callback,
+  // deixa passar sem redirecionar para a home do perfil
+  if (url.pathname.startsWith('/reset-password') || url.pathname.startsWith('/auth/callback')) {
+    return supabaseResponse
   }
 
   if (user) {
@@ -44,7 +52,7 @@ export async function middleware(request: NextRequest) {
 
     const role = profile?.role ?? 'driver'
 
-    //  CORREÇÃO: operadores || em vez de espaço
+    // CORREÇÃO: Sintaxe com operadores || mantida corretamente
     const isGestor = role === 'admin' || role === 'gestor' || role === 'manager'
     const isMecanico = role === 'mechanic' || role === 'mecanico'
 
@@ -57,7 +65,6 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    //  CORREÇÃO: operadores ||
     if ((url.pathname.startsWith('/admin') || url.pathname.startsWith('/manager')) && !isGestor) {
       url.pathname = userHome
       return NextResponse.redirect(url)
