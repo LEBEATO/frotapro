@@ -25,55 +25,52 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
   const url = request.nextUrl.clone()
+  const pathname = url.pathname
 
-  // 1. PERMITE ACESSO PÚBLICO ÀS ROTAS DE AUTENTICAÇÃO
-  if (
-    !user &&
-    !url.pathname.startsWith('/login') &&
-    !url.pathname.startsWith('/reset-password') &&
-    !url.pathname.startsWith('/auth/callback')
-  ) {
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
-  }
-
-  // 2. ISENÇÃO: Se o usuário estiver acessando a redefinição de senha ou o callback,
-  // deixa passar sem redirecionar para a home do perfil
-  if (url.pathname.startsWith('/reset-password') || url.pathname.startsWith('/auth/callback')) {
+  // 1. ROTAS DE CONVITE E REDEFINIÇÃO DE SENHA (LIBERADAS PARA O FLUXO DO E-MAIL)
+  if (pathname.startsWith('/auth/callback') || pathname.startsWith('/reset-password')) {
     return supabaseResponse
   }
 
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    const role = profile?.role ?? 'driver'
-
-    // CORREÇÃO: Sintaxe com operadores || mantida corretamente
-    const isGestor = role === 'admin' || role === 'gestor' || role === 'manager'
-    const isMecanico = role === 'mechanic' || role === 'mecanico'
-
-    let userHome = '/driver'
-    if (isGestor) userHome = '/admin'
-    if (isMecanico) userHome = '/mechanic'
-
-    if (url.pathname.startsWith('/login')) {
-      url.pathname = userHome
+  // 2. SE NÃO TIVER USUÁRIO LOGADO -> FORÇA O LOGIN OBRIGATÓRIO
+  if (!user) {
+    if (!pathname.startsWith('/login')) {
+      url.pathname = '/login'
       return NextResponse.redirect(url)
     }
+    return supabaseResponse
+  }
 
-    if ((url.pathname.startsWith('/admin') || url.pathname.startsWith('/manager')) && !isGestor) {
-      url.pathname = userHome
-      return NextResponse.redirect(url)
-    }
+  // 3. USUÁRIO LOGADO -> BUSCA A ROLE E ISOLA OS ACESSOS
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
 
-    if (url.pathname.startsWith('/mechanic') && !isMecanico && !isGestor) {
-      url.pathname = userHome
-      return NextResponse.redirect(url)
-    }
+  const role = profile?.role ?? 'driver'
+  const isGestor = role === 'admin' || role === 'gestor' || role === 'manager'
+
+  const homeDoUsuario = isGestor ? '/admin' : '/driver'
+
+  // Se já está logado e tenta abrir a tela de login, manda para a sua Home
+  if (pathname.startsWith('/login')) {
+    url.pathname = homeDoUsuario
+    return NextResponse.redirect(url)
+  }
+
+  // --- REGRAS DE BLOQUEIO CRUZADO ---
+
+  // Motorista tentando entrar na área do Gestor (/admin ou /manager)
+  if ((pathname.startsWith('/admin') || pathname.startsWith('/manager')) && !isGestor) {
+    url.pathname = '/driver'
+    return NextResponse.redirect(url)
+  }
+
+  // Gestor tentando entrar na área do Motorista (/driver)
+  if (pathname.startsWith('/driver') && isGestor) {
+    url.pathname = '/admin'
+    return NextResponse.redirect(url)
   }
 
   return supabaseResponse
@@ -87,6 +84,5 @@ export const config = {
     '/admin/:path*',
     '/manager/:path*',
     '/driver/:path*',
-    '/mechanic/:path*'
   ],
 }
