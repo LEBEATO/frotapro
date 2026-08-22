@@ -12,7 +12,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const siteUrl = "https://frotapro.vercel.app";
+const siteUrl = "https://frotapro-zeta.vercel.app"; // Atualizado com o domínio ativo da Vercel
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -22,10 +22,10 @@ export const metadata: Metadata = {
     title: "FROTA PRO",
     description: "Controle de frota para empresas de transporte",
     siteName: "FROTA PRO",
-    url: siteUrl,
+    url: "/",
     images: [
       {
-        url: `${siteUrl}/og-image.png`, 
+        url: "/og-image.png", // O metadataBase completa a URL automaticamente
         width: 1200,
         height: 630,
         alt: "FROTA PRO - Gestão de Frotas",
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "FROTA PRO",
     description: "Controle de frota para empresas de transporte",
-    images: [`${siteUrl}/og-image.png`],
+    images: ["/og-image.png"],
   },
   icons: {
     icon: "/favicon.ico",
@@ -53,7 +53,7 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} 
+      className={${geistSans.variable} ${geistMono.variable} h-full antialiased}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
