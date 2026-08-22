@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     url: "/",
     images: [
       {
-        url: "/og-image.png", // O metadataBase completa a URL automaticamente
+        url: "/frotas.jpg", // O metadataBase completa a URL automaticamente
         width: 1200,
         height: 630,
         alt: "FROTA PRO - Gestão de Frotas",
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "FROTA PRO",
     description: "Controle de frota para empresas de transporte",
-    images: ["/og-image.png"],
+    images: ["/frotas.jpg"],
   },
   icons: {
     icon: "/favicon.ico",
@@ -53,7 +53,7 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={${geistSans.variable} ${geistMono.variable} h-full antialiased}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
