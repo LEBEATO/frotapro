@@ -1,56 +1,30 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 
-// Componente interno com a lógica da página e os hooks de navegação
-function ResetPasswordContent() {
+function ResetPasswordForm() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const supabase = createClient()
-
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(true)
 
   useEffect(() => {
-    async function handleSession() {
-      // 1. Verifica se já existe uma sessão
-      const { data: sessionData } = await supabase.auth.getSession()
-
-      if (sessionData.session) {
-        setIsProcessing(false)
-        return
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || (!session && event !== 'INITIAL_SESSION')) {
+        router.push('/login?error=session-required')
       }
+    })
 
-      // 2. Tenta extrair o token da URL (corrigido os operadores ||)
-      const token =
-        searchParams.get('token') ||
-        searchParams.get('code') ||
-        searchParams.get('access_token')
-
-      if (token) {
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(token)
-        if (exchangeError) {
-          console.error('Erro ao trocar token:', exchangeError)
-          router.push('/login?error=invalid-token')
-          return
-        }
-        setIsProcessing(false)
-        return
-      }
-
-      // 3. Se não tem token e não tem sessão → redireciona
-      router.push('/login?error=session-required')
+    return () => {
+      authListener.subscription.unsubscribe()
     }
-
-    handleSession()
-  }, [router, searchParams, supabase.auth])
+  }, [router, supabase.auth])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -72,7 +46,9 @@ function ResetPasswordContent() {
       if (updateError) throw updateError
 
       setSuccess(true)
-      setTimeout(() => router.push('/login'), 2000)
+      setTimeout(() => {
+        router.push('/login')
+      }, 2000)
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message)
@@ -82,18 +58,6 @@ function ResetPasswordContent() {
     } finally {
       setLoading(false)
     }
-  }
-
-  // Tela de carregamento enquanto processa o token
-  if (isProcessing) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-4">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-md w-full text-center">
-          <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
-          <p className="text-sm text-zinc-400">Verificando seu convite...</p>
-        </div>
-      </div>
-    )
   }
 
   if (success) {
@@ -114,8 +78,10 @@ function ResetPasswordContent() {
     <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-4">
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-md w-full">
         <h2 className="text-2xl font-bold text-white text-center">Definir sua senha</h2>
-        <p className="text-sm text-zinc-400 text-center mt-2">Crie uma senha para acessar o sistema Frota Pro.
+        <p className="text-sm text-zinc-400 text-center mt-2">
+          Crie uma senha para acessar o sistema Frota Pro.
         </p>
+
         {error && (
           <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-sm">
             {error}
@@ -142,8 +108,7 @@ function ResetPasswordContent() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full mt-1 px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
-              required
+              className="w-full mt-1 px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"required
             />
           </div>
           <button
@@ -159,20 +124,14 @@ function ResetPasswordContent() {
   )
 }
 
-// Exportação padrão envelopada por Suspense
 export default function ResetPasswordPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-md w-full text-center">
-            <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
-            <p className="text-sm text-zinc-400">Carregando página...</p>
-          </div>
-        </div>
-      }
-    >
-      <ResetPasswordContent />
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-4">
+        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+      </div>
+    }>
+      <ResetPasswordForm />
     </Suspense>
   )
 }
