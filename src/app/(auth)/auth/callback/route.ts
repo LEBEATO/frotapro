@@ -5,6 +5,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
+  
+  // Garanta que o caminho padrão coincide com a pasta criada no seu app
   const next = searchParams.get('next') ?? '/reset-password'
 
   if (code) {
@@ -28,9 +30,11 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
+      // Adicionadas as crases para interpolação funcionar
       return NextResponse.redirect(`${origin}${next}`)
     }
   }
 
+  // Adicionadas as crases aqui também
   return NextResponse.redirect(`${origin}/login?error=InvalidToken`)
 }

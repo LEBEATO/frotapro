@@ -3,10 +3,15 @@
 import { createClient } from '@supabase/supabase-js'
 import { vehicleSchema, type VehicleFormData } from '@/lib/schemas'
 
-// Instância do Supabase com privilégios Admin para convidar/gerenciar usuários
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  }
 )
 
 export async function createVehicleAndDriver(formData: VehicleFormData) {
@@ -15,11 +20,12 @@ export async function createVehicleAndDriver(formData: VehicleFormData) {
     const parsedData = vehicleSchema.parse(formData)
     const { model, plate, year, driver_name, driver_email } = parsedData
 
-    const redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://frotapro-zeta.vercel.app'}/auth/callback?next=/reset-password`
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://frotapro-zeta.vercel.app'
+    const redirectUrl =`${appUrl}/auth/callback?next=/reset-password`
 
     let userId: string | null = null
 
-    // 2. Tenta enviar o convite de novo usuário
+    // 2. Tenta enviar o convite ao motorista
     const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
       driver_email,
       {
@@ -32,51 +38,71 @@ export async function createVehicleAndDriver(formData: VehicleFormData) {
     )
 
     if (inviteError) {
-      // 3. Se o e-mail já existe no Supabase Auth
-      if (inviteError.message.includes('already registered') || inviteError.status === 422) {
-        // Busca o ID do usuário existente
+      // 3. Tratamento se o e-mail já existir no Auth
+      if (
+        inviteError.message.includes('already registered') ||
+        inviteError.message.includes('Database error') ||
+        inviteError.status === 422
+      ) {
         const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
-        const existingUser = existingUsers.users.find((u) => u.email === driver_email)
+        const existingUser = existingUsers?.users?.find((u) => u.email === driver_email)
 
         if (existingUser) {
           userId = existingUser.id
-        }
 
-        // Reenvia o link para redefinição/definição de senha
-        await supabaseAdmin.auth.admin.generateLink({
-          type: 'recovery',
-          email: driver_email,
-          options: { redirectTo: redirectUrl },
-        })
+          // Reenvia link de recuperação de senha
+          await supabaseAdmin.auth.admin.generateLink({
+            type: 'recovery',
+            email: driver_email,
+            options: { redirectTo: redirectUrl },
+          })
+        } else {
+          throw new Error(`Erro no Supabase Auth: ${inviteError.message}`)
+        }
       } else {
         throw new Error(`Erro ao enviar convite: ${inviteError.message}`)
       }
-    } else {
+    } else if (inviteData?.user) {
       userId = inviteData.user.id
     }
 
-    // 4. Garante a criação/atualização do perfil na tabela profiles
-    if (userId) {
-      await supabaseAdmin.from('profiles').upsert({
+    if (!userId) {
+      throw new Error('Não foi possível identificar o usuário motorista.')
+    }
+
+    // 4. Garante a criação/atualização do perfil em profiles COM E-MAIL
+    const { error: profileError } = await supabaseAdmin.from('profiles').upsert(
+      {
         id: userId,
         full_name: driver_name,
+        email: driver_email,
         role: 'driver',
-      })
+      },
+      { onConflict: 'id' }
+    )
 
-      // 5. Cadastra o veículo e vincula ao ID do motorista
-      const { error: vehicleError } = await supabaseAdmin.from('vehicles').insert({
-        model,
-        plate: plate.toUpperCase(),
-        year,
-        driver_id: userId,
-      })
+    if (profileError) {
+      console.error('Erro ao atualizar profiles:', profileError.message)
+    }
 
-      if (vehicleError) throw new Error(`Erro ao cadastrar veículo: ${vehicleError.message}`)
+    // 5. Cadastra na tabela vehicles enviando TODOS os campos NOT NULL da DDL
+    const { error: vehicleError } = await supabaseAdmin.from('vehicles').insert({
+      model,
+      plate: plate.toUpperCase(),
+      year: String(year),
+      driver_name: driver_name,
+      driver_email: driver_email,
+      driver_id: userId,
+      status: 'Ativo',
+    })
+
+    if (vehicleError) {
+      throw new Error(`Erro ao cadastrar veículo: ${vehicleError.message}`)
     }
 
     return {
       success: true,
-      message: 'Veículo vinculado com sucesso! Link de acesso enviado ao e-mail do motorista.',
+      message: 'Veículo e motorista vinculados com sucesso! E-mail de convite enviado.',
     }
   } catch (err: unknown) {
     return {
