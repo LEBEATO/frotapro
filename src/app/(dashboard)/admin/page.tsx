@@ -66,14 +66,16 @@ export default function AdminDashboardPage() {
 
   async function fetchVehicles() {
     try {
+      // Busca todos os veículos da tabela sem filtrar por user_id, igual à página da Frota
       const { data, error } = await supabase
         .from('vehicles')
         .select('*')
         .order('created_at', { ascending: false })
+
       if (error) throw error
       setVehicles(data || [])
     } catch (err) {
-      console.error('Falha na busca:', err)
+      console.error('Falha na busca de veículos:', err)
     }
   }
 
@@ -84,6 +86,7 @@ export default function AdminDashboardPage() {
         .select('id, vehicle_plate, driver, has_issue, created_at')
         .order('created_at', { ascending: false })
         .limit(5)
+
       if (!error && data) setRecentChecklists(data)
     } catch (err) {
       console.error('Erro ao buscar checklists recentes:', err)
@@ -123,13 +126,12 @@ export default function AdminDashboardPage() {
           bg-[#0F1423] border-r border-slate-800/60 p-5
           flex flex-col justify-between
           transition-transform duration-300 ease-in-out
-          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        `}
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
         <div className="space-y-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30"><Truck className="w-5 h-5" />
+            <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30">
+                <Truck className="w-5 h-5" />
               </div>
               <div>
                 <h1 className="font-bold text-lg text-white tracking-tight leading-none">FleetHub</h1>
@@ -188,10 +190,10 @@ export default function AdminDashboardPage() {
       <main className="flex-1 flex flex-col min-w-0">
         <header className="p-4 sm:p-6 border-b border-slate-800/40 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 text-slate-300 hover:bg-slate-800 rounded-xl transition">
-              <Menu className="w-6 h-6" />
+            <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 text-slate-300 hover:bg-slate-800 rounded-xl transition"><Menu className="w-6 h-6" />
             </button>
-            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Painel do Gestor</h2></div>
+            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Painel do Gestor</h2>
+          </div>
           <div className="flex items-center gap-3">
             <button className="relative p-2.5 text-slate-300 bg-[#121727] hover:bg-slate-800 border border-slate-800 rounded-xl transition">
               <Bell className="w-5 h-5" />
@@ -217,58 +219,27 @@ export default function AdminDashboardPage() {
                 <Truck className="w-6 h-6" />
               </div>
             </div>
+
             <div className="bg-[#121727] border border-slate-800/80 rounded-2xl p-6 flex justify-between items-start">
               <div className="space-y-3">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Veículos Ativos</span>
                 <div className="text-3xl font-extrabold text-emerald-400">{activeVehicles}</div>
-                <p className="text-xs text-emerald-500/80 font-medium">Prontos para transporte</p>
+                <p className="text-xs text-slate-500 font-medium">Prontos para rodar</p>
               </div>
               <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
             </div>
+
             <div className="bg-[#121727] border border-slate-800/80 rounded-2xl p-6 flex justify-between items-start">
               <div className="space-y-3">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Em Manutenção</span>
                 <div className="text-3xl font-extrabold text-amber-400">{maintenanceVehicles}</div>
-                <p className="text-xs text-amber-500/80 font-medium">Revisão ou mecânica</p>
+                <p className="text-xs text-slate-500 font-medium">Requerem atenção</p>
               </div>
               <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-2xl">
                 <Wrench className="w-6 h-6" />
               </div>
-            </div>
-          </div>
-
-          <div className="bg-[#121727] border border-slate-800/80 rounded-2xl p-5">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                <ClipboardList className="w-4 h-4 text-indigo-400" />
-                Últimas Inspeções
-              </h4>
-              <Link href="/manager/checklists" className="text-xs text-indigo-400 hover:underline">
-                Ver todas →
-              </Link>
-            </div>
-            <div className="mt-3 space-y-2">
-              {recentChecklists.length === 0 ? (
-                <p className="text-xs text-slate-500">Nenhuma inspeção registrada ainda.</p>
-              ) : (
-                recentChecklists.map((item) => (<div key={item.id} className="flex justify-between items-center text-xs border-b border-slate-800/60 py-2">
-                    <span className="text-slate-300 font-mono">{item.vehicle_plate}</span>
-                    <span className="text-slate-400">{item.driver}</span>
-                    <span className="flex items-center gap-1">
-                      {item.has_issue ? (
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                      ) : (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                      )}
-                      <span className="text-slate-500 text-[10px]">
-                        {new Date(item.created_at).toLocaleDateString('pt-BR')}
-                      </span>
-                    </span>
-                  </div>
-                ))
-              )}
             </div>
           </div>
         </div>

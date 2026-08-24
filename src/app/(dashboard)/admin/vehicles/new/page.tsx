@@ -107,7 +107,7 @@ export default function NewVehiclePage() {
             </div>
           </div>
 
-          {/* ❌ CAMPO DE SENHA REMOVIDO — o motorista define a própria senha no convite */}
+          {/*  CAMPO DE SENHA REMOVIDO — o motorista define a própria senha no convite */}
 
           <button type="submit" disabled={loading} className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition shadow-lg shadow-indigo-600/20 disabled:opacity-50 flex items-center justify-center gap-2">
             {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Cadastrando...</> : 'Cadastrar Veículo e Enviar Convite'}

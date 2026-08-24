@@ -21,6 +21,7 @@ import {
   Mail,
   Wrench,
   ArrowLeft,
+  Trash2,
 } from 'lucide-react'
 
 interface ChecklistItem {
@@ -49,12 +50,14 @@ export default function ManagerChecklistsPage() {
   const [filterIssues, setFilterIssues] = useState(false)
   const [selectedPhotos, setSelectedPhotos] = useState<string[] | null>(null)
   const [sendingMaintenance, setSendingMaintenance] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null)
   const [confirmResolve, setConfirmResolve] = useState<{
     checklistId: string
     vehiclePlate: string | null
   } | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   const supabase = createClient()
 
@@ -79,9 +82,41 @@ export default function ManagerChecklistsPage() {
   async function fetchChecklists() {
     setLoading(true)
     try {
+      // 1. Descobrir qual gestor está logado atualmente
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        showToast('Usuário não autenticado.', 'error')
+        setLoading(false)
+        return
+      }
+
+      // 2. Buscar os veículos que pertencem a este gestor 
+      // (Ajuste o filtro 'manager_id' ou 'user_id' conforme o nome da coluna na sua tabela 'vehicles')
+      const { data: vehiclesData, error: vehiclesError } = await supabase
+        .from('vehicles')
+        .select('plate')
+        .or(`manager_id.eq.${user.id},user_id.eq.${user.id}`) // Exemplo flexível de associação
+
+      if (vehiclesError) {
+        console.error('Erro ao buscar veículos do gestor:', vehiclesError)
+      }
+
+      // Extrai as placas dos veículos do gestor logado
+      const gestorPlates = (vehiclesData || []).map((v) => v.plate?.trim().toUpperCase()).filter(Boolean)
+
+      // Se o gestor ainda não tem veículos cadastrados/vinculados, retorna vazio para não exibir carros de outros
+      if (gestorPlates.length === 0) {
+        setChecklists([])
+        setLoading(false)
+        return
+      }
+
+      // 3. Buscar apenas os checklists cujas placas pertencem ao gestor logado
       const { data, error } = await supabase
         .from('driver_checklists')
         .select('*')
+        .in('vehicle_plate', gestorPlates)
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -89,7 +124,6 @@ export default function ManagerChecklistsPage() {
         showToast(`Erro ao buscar checklists: ${error.message}`, 'error')
         return
       }
-
       const latestByPlate = Object.values(
         (data || []).reduce((acc: Record<string, Checklist>, current) => {
           const plate = current.vehicle_plate || current.id
@@ -122,6 +156,28 @@ export default function ManagerChecklistsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  async function handleDeleteChecklist(id: string) {
+    setDeletingId(id)
+    try {
+      const { error } = await supabase
+        .from('driver_checklists')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      showToast('Checklist excluído com sucesso!', 'success')
+      setChecklists((prev) => prev.filter((item) => item.id !== id))
+    } catch (err: unknown) {
+      console.error('Erro ao excluir:', err)
+      const msg = err instanceof Error ? err.message : 'Erro ao excluir'
+      showToast(`Erro ao excluir checklist: ${msg}`, 'error')
+    } finally {
+      setDeletingId(null)
+      setConfirmDelete(null)
+    }
+  }
+
   async function executeResolveMaintenance(checklistId: string, vehiclePlate: string | null) {
     setSendingMaintenance(checklistId)
     try {
@@ -140,7 +196,8 @@ export default function ManagerChecklistsPage() {
             value: item.value === 'NÃO' ? 'SIM' : item.value,
           }))
         : []
-        const { error: insertErr } = await supabase
+
+      const { error: insertErr } = await supabase
         .from('driver_checklists')
         .insert({
           id: crypto.randomUUID(),
@@ -191,7 +248,6 @@ export default function ManagerChecklistsPage() {
 
     return matchesSearch
   })
-
   return (
     <div className="min-h-screen bg-zinc-950 text-white p-4 md:p-8">
       {toast && (
@@ -201,6 +257,8 @@ export default function ManagerChecklistsPage() {
           onClose={() => setToast(null)}
         />
       )}
+
+      {/* Modal Confirmar Resolver */}
       {confirmResolve && (
         <ConfirmModal
           isOpen={!!confirmResolve}
@@ -216,6 +274,20 @@ export default function ManagerChecklistsPage() {
             )
           }
           onCancel={() => setConfirmResolve(null)}
+        />
+      )}
+
+      {/* Modal Confirmar Exclusão */}
+      {confirmDelete && (
+        <ConfirmModal
+          isOpen={!!confirmDelete}
+          title="Excluir Checklist"
+          message="Tem certeza que deseja apagar permanentemente este checklist?"
+          isLoading={deletingId === confirmDelete}
+          confirmText="Excluir"
+          cancelText="Cancelar"
+          onConfirm={() => handleDeleteChecklist(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
         />
       )}
 
@@ -251,6 +323,7 @@ export default function ManagerChecklistsPage() {
           </div>
         </div>
       )}
+
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Cabeçalho */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-900 border border-zinc-800 p-6 rounded-2xl">
@@ -268,8 +341,7 @@ export default function ManagerChecklistsPage() {
               </h1>
               <p className="text-xs text-zinc-400 mt-1">
                 Acompanhamento de rotina e relatórios pré-viagem da frota
-              </p>
-            </div>
+              </p></div>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -314,7 +386,7 @@ export default function ManagerChecklistsPage() {
           </div>
         ) : filteredChecklists.length === 0 ? (
           <div className="text-center py-16 bg-zinc-900/50 border border-zinc-800/80 rounded-2xl">
-            <p className="text-zinc-400 text-sm">Nenhum checklist encontrado com esses filtros.</p>
+            <p className="text-zinc-400 text-sm">Nenhum checklist encontrado para os seus veículos.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -327,23 +399,35 @@ export default function ManagerChecklistsPage() {
               return (
                 <div
                   key={item.id}
-                  className={`bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between space-y-4 transition hover:border-zinc-700 ${item.has_issue ? 'border-amber-500/30' : 'border-zinc-800'
-                  }`}
+                  className={`bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between space-y-4 transition hover:border-zinc-700 ${item.has_issue ? 'border-amber-500/30' : 'border-zinc-800'}`}
                 >
                   <div>
                     <div className="flex justify-between items-start mb-3">
                       <span className="text-xs px-2.5 py-1 bg-zinc-800 border border-zinc-700 rounded-lg font-mono font-bold text-blue-400 uppercase tracking-wider">
                         {item.vehicle_plate || 'SEM PLACA'}
                       </span>
-                      <span className="text-[11px] text-zinc-500 flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5" />
-                        {new Date(item.created_at).toLocaleDateString('pt-BR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-zinc-500 flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5" />
+                          {new Date(item.created_at).toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            hour: '2-digit',minute: '2-digit',
+                          })}
+                        </span>
+                        <button
+                          onClick={() => setConfirmDelete(item.id)}
+                          disabled={deletingId === item.id}
+                          className="p-1 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition"
+                          title="Excluir checklist"
+                        >
+                          {deletingId === item.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="space-y-1 mb-4">
@@ -368,7 +452,7 @@ export default function ManagerChecklistsPage() {
                         {checklistItems.map((check, idx) => (
                           <span
                             key={idx}
-                            className={`text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1 ${
+                        className={`text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1 ${
                               check.ok
                                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                                 : 'bg-red-500/10 text-red-400 border border-red-500/20'
@@ -394,9 +478,10 @@ export default function ManagerChecklistsPage() {
                         </div>
                         <p className="text-amber-200/80 leading-relaxed">{item.observation}</p>
                       </div>
-                    )}{hasPendingMaintenance && (
-                      <div className="mt-3 p-2 bg-red-500/10 border border-red-500/20 rounded-xl">
-                        <p className="text-xs text-red-400 font-medium flex items-center gap-1">
+                    )}
+
+                    {hasPendingMaintenance && (
+                      <div className="mt-3 p-2 bg-red-500/10 border border-red-500/20 rounded-xl"><p className="text-xs text-red-400 font-medium flex items-center gap-1">
                           <AlertTriangle className="w-3.5 h-3.5" /> Pendências: {itensNaoOk.join(', ')}
                         </p>
                         <button
