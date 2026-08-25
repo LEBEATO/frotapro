@@ -14,6 +14,13 @@ const supabaseAdmin = createClient(
   }
 )
 
+function isEmailRateLimitError(error: { message: string; status?: number }) {
+  return (
+    error.status === 429 ||
+    error.message.toLowerCase().includes('email rate limit exceeded')
+  )
+}
+
 export async function createVehicleAndDriver(formData: VehicleFormData) {
   try {
     // 1. Validação dos dados do formulário
@@ -38,6 +45,12 @@ export async function createVehicleAndDriver(formData: VehicleFormData) {
     )
 
     if (inviteError) {
+      if (isEmailRateLimitError(inviteError)) {
+        throw new Error(
+          'O limite de envio de e-mails do Supabase foi atingido. Aguarde cerca de 1 hora para tentar novamente ou configure um SMTP próprio em Authentication > Emails > SMTP Settings.'
+        )
+      }
+
       // 3. Tratamento se o e-mail já existir no Auth
       if (
         inviteError.message.includes('already registered') ||

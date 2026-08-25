@@ -159,7 +159,7 @@ export default function AdminDashboardPage() {
               <ClipboardList className="w-4 h-4" />
               Histórico Checklists
             </Link>
-            <Link href="#" className="flex items-center justify-between px-3 py-2.5 rounded-xl text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 transition text-sm font-medium">
+            <Link href="/maintenance" className="flex items-center justify-between px-3 py-2.5 rounded-xl text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 transition text-sm font-medium">
               <div className="flex items-center gap-3">
                 <Wrench className="w-4 h-4" />
                 Manutenção

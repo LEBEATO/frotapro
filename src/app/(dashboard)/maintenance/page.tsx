@@ -1,0 +1,534 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
+import { createClient } from '@/lib/supabase/client'
+import { Toast, ToastType } from '@/components/Toast'
+import { ConfirmModal } from '@/components/ConfirmModal'
+import {
+  ClipboardList,
+  Search,
+  AlertTriangle,
+  CheckCircle2,
+  Calendar,
+  User,
+  Car,
+  Image as ImageIcon,
+  X,
+  Loader2,
+  RefreshCw,
+  Mail,
+  Wrench,
+  ArrowLeft,
+  Trash2,
+} from 'lucide-react'
+
+interface ChecklistItem {
+  name: string
+  value?: 'SIM' | 'NÃO'
+  ok: boolean
+}
+
+interface Checklist {
+  id: string
+  created_at: string
+  driver: string | null
+  driver_email: string | null
+  vehicle_plate: string | null
+  vehicle_model: string | null
+  items: ChecklistItem[] | null
+  has_issue: boolean
+  observation: string | null
+  photos: string[] | null
+}
+
+export default function MaintenancePage() {
+  const [checklists, setChecklists] = useState<Checklist[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [selectedPhotos, setSelectedPhotos] = useState<string[] | null>(null)
+  const [sendingMaintenance, setSendingMaintenance] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null)
+  const [confirmResolve, setConfirmResolve] = useState<{
+    checklistId: string
+    vehiclePlate: string | null
+  } | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+
+  const supabase = createClient()
+
+  function showToast(message: string, type: ToastType = 'success') {
+    setToast({ message, type })
+  }
+
+  function getChecklistItems(items: ChecklistItem[] | null) {
+    return Array.isArray(items) ? items : []
+  }
+
+  function getChecklistPhotos(photos: string[] | null) {
+    return Array.isArray(photos) ? photos : []
+  }
+
+  function getRecordedMileage(observation: string | null) {
+    if (!observation) return null
+    const match = observation.match(/KM(?: Atual)?(?: registrado)?:\s*([\d.,]+)/i)
+    return match ? match[1] : null
+  }
+
+  async function fetchMaintenanceChecklists() {
+    setLoading(true)
+    try {
+      // 1. Usuário logado
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        showToast('Usuário não autenticado.', 'error')
+        setLoading(false)
+        return
+      }
+
+      console.log('🆔 User ID:', user.id)
+
+      // 2. Buscar veículos do gestor (usando created_by ou user_id)
+      const { data: vehiclesData, error: vehiclesError } = await supabase
+        .from('vehicles')
+        .select('plate')
+        .or(`created_by.eq.${user.id},user_id.eq.${user.id}`)
+
+      if (vehiclesError) {
+        console.error(' Erro detalhado ao buscar veículos:', {
+          message: vehiclesError.message,
+          details: vehiclesError.details,
+          hint: vehiclesError.hint,
+          code: vehiclesError.code,
+        })
+        showToast(`Erro ao buscar veículos: ${vehiclesError.message}`, 'error')
+        setLoading(false)
+        return
+      }
+
+      const gestorPlates = (vehiclesData || [])
+        .map((v) => v.plate?.trim().toUpperCase())
+        .filter(Boolean)
+
+      console.log('🚗 Placas encontradas:', gestorPlates)
+
+      if (gestorPlates.length === 0) {
+        setChecklists([])
+        setLoading(false)
+        return
+      }
+
+      // 3. Buscar todos os checklists desses veículos
+      const { data, error } = await supabase
+        .from('driver_checklists')
+        .select('*')
+        .in('vehicle_plate', gestorPlates)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('❌ Erro ao buscar checklists:', error)
+        showToast(`Erro ao buscar manutenções: ${error.message}`, 'error')
+        return
+      }// 4. Filtrar apenas checklists com defeito
+      const allWithIssues = (data || []).filter((item) => {
+        const items = getChecklistItems(item.items)
+        const hasItemOkFalse = items.some((i) => !i.ok)
+        return item.has_issue === true || hasItemOkFalse
+      })
+
+      // 5. Manter apenas o checklist mais recente por placa
+      const latestByPlate = Object.values(
+        allWithIssues.reduce((acc: Record<string, Checklist>, current) => {
+          const plate = current.vehicle_plate || current.id
+          if (!acc[plate]) {
+            acc[plate] = current
+          } else {
+            const currentDate = new Date(current.created_at).getTime()
+            const existingDate = new Date(acc[plate].created_at).getTime()
+            if (currentDate > existingDate) {
+              acc[plate] = current
+            }
+          }
+          return acc
+        }, {})
+      )
+
+      // Ordenar: primeiro os mais graves (com itens NÃO) e depois por data
+      latestByPlate.sort((a, b) => {
+        const aItems = getChecklistItems(a.items)
+        const bItems = getChecklistItems(b.items)
+        const aHasIssue = aItems.some((i) => !i.ok)
+        const bHasIssue = bItems.some((i) => !i.ok)
+        if (aHasIssue && !bHasIssue) return -1
+        if (!aHasIssue && bHasIssue) return 1
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      })
+
+      setChecklists(latestByPlate)
+    } catch (err: unknown) {
+      console.error(' Erro inesperado:', err)
+      const msg = err instanceof Error ? err.message : 'Erro inesperado'
+      showToast(`Erro ao carregar manutenções: ${msg}`, 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchMaintenanceChecklists()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function handleDeleteChecklist(id: string) {
+    setDeletingId(id)
+    try {
+      const { error } = await supabase
+        .from('driver_checklists')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      showToast('Checklist excluído com sucesso!', 'success')
+      setChecklists((prev) => prev.filter((item) => item.id !== id))
+    } catch (err: unknown) {
+      console.error('Erro ao excluir:', err)
+      const msg = err instanceof Error ? err.message : 'Erro ao excluir'
+      showToast(`Erro ao excluir checklist: ${msg}`, 'error')
+    } finally {
+      setDeletingId(null)
+      setConfirmDelete(null)
+    }
+  }
+
+  async function executeResolveMaintenance(checklistId: string, vehiclePlate: string | null) {
+    setSendingMaintenance(checklistId)
+    try {
+      const { data: current, error: fetchErr } = await supabase
+        .from('driver_checklists')
+        .select('*')
+        .eq('id', checklistId)
+        .single()
+
+      if (fetchErr || !current) throw new Error('Checklist não encontrado.')
+
+      // Marcar todos os itens como OK
+      const updatedItems = Array.isArray(current.items)
+        ? current.items.map((item: ChecklistItem) => ({
+            ...item,
+            ok: true,
+            value: item.value === 'NÃO' ? 'SIM' : item.value,
+          }))
+        : []
+
+      // Inserir novo checklist como "resolvido"
+      const { error: insertErr } = await supabase
+        .from('driver_checklists')
+        .insert({
+          id: crypto.randomUUID(),
+          driver: current.driver,
+          driver_email: current.driver_email,
+          vehicle_plate: current.vehicle_plate,
+          vehicle_model: current.vehicle_model,
+          items: updatedItems,
+          has_issue: false,
+          observation: 'Manutenção realizada e pendências resolvidas pelo gestor.',
+          photos: current.photos,
+        })
+
+      if (insertErr) {
+        showToast(`Erro ao salvar manutenção: ${insertErr.message}`, 'error')
+        return
+      }
+
+      // Atualizar status do veículo para Ativo e limpar issues
+      if (vehiclePlate) {
+        await supabase
+          .from('vehicles')
+          .update({ status: 'Ativo', issues: null })
+          .ilike('plate', vehiclePlate.trim())
+      }showToast('Manutenção marcada como resolvida!', 'success')
+      await fetchMaintenanceChecklists()
+    } catch (err: unknown) {
+      console.error('Erro ao resolver:', err)
+      const msg = err instanceof Error ? err.message : 'Erro inesperado'
+      showToast(`Falha ao resolver manutenção: ${msg}`, 'error')
+    } finally {
+      setSendingMaintenance(null)
+      setConfirmResolve(null)
+    }
+  }
+
+  // Filtro de busca (placa, modelo ou motorista)
+  const filteredChecklists = checklists.filter((item) => {
+    const searchLower = search.toLowerCase()
+    return (
+      (item.vehicle_plate || '').toLowerCase().includes(searchLower)|| 
+      (item.vehicle_model || '').toLowerCase().includes(searchLower)|| 
+      (item.driver || '').toLowerCase().includes(searchLower)
+    )
+  })
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-white p-4 md:p-8">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
+      {/* Modal Confirmar Resolver */}
+      {confirmResolve && (
+        <ConfirmModal
+          isOpen={!!confirmResolve}
+          title="Resolver Manutenção"
+          message="Deseja marcar todas as avarias deste veículo como resolvidas e atualizar o status para Ativo?"
+          isLoading={sendingMaintenance === confirmResolve.checklistId}
+          confirmText="Confirmar"
+          cancelText="Cancelar"
+          onConfirm={() =>
+            executeResolveMaintenance(
+              confirmResolve.checklistId,
+              confirmResolve.vehiclePlate
+            )
+          }
+          onCancel={() => setConfirmResolve(null)}
+        />
+      )}
+
+      {/* Modal Confirmar Exclusão */}
+      {confirmDelete && (
+        <ConfirmModal
+          isOpen={!!confirmDelete}
+          title="Excluir Checklist"
+          message="Tem certeza que deseja apagar permanentemente este checklist?"
+          isLoading={deletingId === confirmDelete}
+          confirmText="Excluir"
+          cancelText="Cancelar"
+          onConfirm={() => handleDeleteChecklist(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+
+      {/* Modal de Fotos */}
+      {selectedPhotos && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-3xl w-full p-6 relative space-y-4">
+            <div className="flex justify-between items-center pb-3 border-b border-zinc-800">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-blue-400" /> Fotos Anexadas
+              </h3>
+              <button
+                type="button"
+                onClick={() => setSelectedPhotos(null)}
+                className="p-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto pr-1">
+              {selectedPhotos.map((photoUrl, idx) => (
+                <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-zinc-800 bg-black">
+                  <Image
+                    src={photoUrl}
+                    alt={`Foto ${idx + 1}`}
+                    fill
+                    className="object-contain"
+                    unoptimized
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* Cabeçalho */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-900 border border-zinc-800 p-6 rounded-2xl"><div className="flex items-start gap-3">
+            <Link
+              href="/admin"
+              className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl transition"
+              aria-label="Voltar ao painel do gestor"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </Link>
+            <div>
+              <h1 className="text-xl font-bold flex items-center gap-2">
+                <Wrench className="w-6 h-6 text-amber-500" /> Manutenções Pendentes
+              </h1>
+              <p className="text-xs text-zinc-400 mt-1">
+                Veículos que necessitam de reparos ou revisão
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={fetchMaintenanceChecklists}
+              disabled={loading}
+              className="p-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl transition text-xs flex items-center gap-2 border border-zinc-700 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
+            </button>
+          </div>
+        </div>
+
+        {/* Campo de busca */}
+        <div className="relative">
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <input
+            type="text"
+            placeholder="Buscar por placa, modelo ou motorista..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+          />
+        </div>
+
+        {/* Grid de Cards - apenas manutenções pendentes */}
+        {loading ? (
+          <div className="flex justify-center items-center py-20 text-zinc-500 gap-2">
+            <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+            <span>Carregando manutenções...</span>
+          </div>
+        ) : filteredChecklists.length === 0 ? (
+          <div className="text-center py-16 bg-zinc-900/50 border border-zinc-800/80 rounded-2xl">
+            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
+            <p className="text-zinc-400 text-sm">Nenhum veículo com manutenção pendente no momento.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredChecklists.map((item) => {
+              const checklistItems = getChecklistItems(item.items)
+              const checklistPhotos = getChecklistPhotos(item.photos)
+              const itensNaoOk = checklistItems.filter((i) => !i.ok).map((i) => i.name)
+              const hasPendingMaintenance = itensNaoOk.length > 0
+
+              return (
+                <div
+                  key={item.id}
+                  className={`bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between space-y-4 transition hover:border-zinc-700 ${
+                    hasPendingMaintenance ? 'border-red-500/40' : 'border-amber-500/30'
+                  }`}
+                >
+                  <div>
+                    <div className="flex justify-between items-start mb-3">
+                      <span className="text-xs px-2.5 py-1 bg-zinc-800 border border-zinc-700 rounded-lg font-mono font-bold text-red-400 uppercase tracking-wider">
+                        {item.vehicle_plate || 'SEM PLACA'}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-zinc-500 flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5" />
+                          {new Date(item.created_at).toLocaleDateString('pt-BR', {day: '2-digit',
+                            month: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                        <button
+                          onClick={() => setConfirmDelete(item.id)}
+                          disabled={deletingId === item.id}
+                          className="p-1 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition"
+                          title="Excluir checklist"
+                        >
+                          {deletingId === item.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 mb-4">
+                      <div className="text-sm font-semibold text-white flex items-center gap-1.5">
+                        <User className="w-4 h-4 text-zinc-400" /> {item.driver || 'Não informado'}
+                      </div>
+                      <div className="text-xs text-zinc-300 flex items-center gap-1">
+                        <Car className="w-3 h-3 text-zinc-500" /> {item.vehicle_model || 'Modelo não informado'}
+                      </div>
+                      {item.driver_email && (
+                        <div className="text-xs text-zinc-400 flex items-center gap-1">
+                          <Mail className="w-3 h-3" /> {item.driver_email}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-zinc-950/60 p-3 rounded-xl border border-zinc-800/60 mb-3 space-y-1.5">
+                      <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+                        Itens com Defeito
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {checklistItems.map((check, idx) => (
+                          <span
+                            key={idx}
+                            className={`text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1 ${
+                              check.ok
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                            }`}
+                          >
+                            {check.ok ? <CheckCircle2 className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                            {check.name}: {check.value || (check.ok ? 'SIM' : 'NÃO')}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {getRecordedMileage(item.observation) && (
+                      <div className="mb-3 px-3 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-300">
+                        <span className="font-semibold">KM registrado:</span> {getRecordedMileage(item.observation)}
+                      </div>
+                    )}
+
+                    {item.observation && (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-xl text-xs space-y-1">
+                        <div className="font-semibold flex items-center gap-1">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> Observação do Motorista:
+                        </div>
+                        <p className="text-amber-200/80 leading-relaxed">{item.observation}</p>
+                      </div>
+                    )}{hasPendingMaintenance && (
+                      <div className="mt-3 p-2 bg-red-500/10 border border-red-500/20 rounded-xl">
+                        <p className="text-xs text-red-400 font-medium flex items-center gap-1">
+                          <AlertTriangle className="w-3.5 h-3.5" /> Pendências: {itensNaoOk.join(', ')}
+                        </p>
+                        <button
+                          onClick={() => setConfirmResolve({ checklistId: item.id, vehiclePlate: item.vehicle_plate })}
+                          disabled={sendingMaintenance === item.id}
+                          className="mt-2 w-full py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition disabled:opacity-50"
+                        >
+                          {sendingMaintenance === item.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Wrench className="w-3.5 h-3.5" />
+                          )}
+                          Resolver Manutenção
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {checklistPhotos.length > 0 && (
+                    <button
+                      onClick={() => setSelectedPhotos(checklistPhotos)}
+                      className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-medium flex items-center justify-center gap-2 border border-zinc-700 transition"
+                    >
+                      <ImageIcon className="w-4 h-4 text-blue-400" />
+                      Ver {checklistPhotos.length} {checklistPhotos.length === 1 ? 'Foto Anexada' : 'Fotos Anexadas'}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
