@@ -2,10 +2,19 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import { Shield, Truck, KeyRound, Mail, Loader2 } from 'lucide-react'
+import {
+  KeyRound,
+  Loader2,
+  Mail,
+  Shield,
+  Truck,
+} from 'lucide-react'
 
-type Role = 'gestor' | 'admin' | 'motorista' | 'driver' | 'mecanico' | 'mechanic'
+import {
+  getHomeByRole,
+  normalizeRole,
+} from '@/lib/auth/roles'
+import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -13,50 +22,125 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
-  const supabase = createClient()
   const router = useRouter()
+  const supabase = createClient()
 
-  async function handleSignIn(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSignIn(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault()
+
+    if (loading) {
+      return
+    }
+
     setLoading(true)
     setErrorMsg('')
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+      const normalizedEmail = email
+        .trim()
+        .toLowerCase()
+
+      // ======================================================
+      // 1. AUTENTICAÇÃO NO SUPABASE
+      // ======================================================
+
+      const {
+        data,
+        error,
+      } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
         password,
       })
 
       if (error || !data.user) {
-        throw new Error('E-mail ou senha incorretos.')
+        throw new Error(
+          'E-mail ou senha incorretos.'
+        )
       }
 
-      const { data: profile, error: profileError } = await supabase
+      // ======================================================
+      // 2. BUSCAR PERFIL
+      // ======================================================
+
+      const {
+        data: profile,
+        error: profileError,
+      } = await supabase
         .from('profiles')
-        .select('role')
+        .select(
+          'id, full_name, role, branch_id, active'
+        )
         .eq('id', data.user.id)
-        .single()
+        .maybeSingle()
 
-      if (profileError || !profile || !profile.role) {
+      // ======================================================
+      // 3. VALIDAR PERFIL
+      // ======================================================
+
+      if (
+        profileError ||
+        !profile
+      ) {
         await supabase.auth.signOut()
-        throw new Error('Perfil não encontrado ou sem permissão atribuída.')
+
+        throw new Error(
+          'Perfil de usuário não encontrado.'
+        )
       }
 
-      const role = profile.role as Role
+      if (profile.active === false) {
+        await supabase.auth.signOut()
 
-      if (role === 'gestor' || role === 'admin') {
-        router.push('/admin')
-      } else if (role === 'mecanico' || role === 'mechanic') {
-        router.push('/mechanic')
-      } else {
-        router.push('/driver')
+        throw new Error(
+          'Seu acesso está desativado. Entre em contato com o administrador.'
+        )
       }
+
+      // ======================================================
+      // 4. NORMALIZAR PERMISSÃO
+      // ======================================================
+
+      const role = normalizeRole(
+        profile.role
+      )
+
+      // ======================================================
+      // 5. GESTOR DE BASE PRECISA POSSUIR BASE
+      // ======================================================
+
+      if (
+        role === 'branch_manager' &&
+        !profile.branch_id
+      ) {
+        await supabase.auth.signOut()
+
+        throw new Error(
+          'Seu usuário ainda não está vinculado a uma base.'
+        )
+      }
+
+      // ======================================================
+      // 6. DEFINIR DASHBOARD
+      // ======================================================
+
+      const destination =
+        getHomeByRole(role)
+
+      // ======================================================
+      // 7. REDIRECIONAR
+      // ======================================================
+
+      router.replace(destination)
       router.refresh()
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setErrorMsg(err.message)
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setErrorMsg(error.message)
       } else {
-        setErrorMsg('Erro ao realizar login. Tente novamente.')
+        setErrorMsg(
+          'Não foi possível realizar o login. Tente novamente.'
+        )
       }
     } finally {
       setLoading(false)
@@ -64,76 +148,190 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-4 relative overflow-hidden">
-      <div className="absolute -top-40 -left-40 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-zinc-950 px-4 py-8 sm:px-6">
 
-      <div className="w-full max-w-md bg-zinc-900/90 backdrop-blur-xl border border-zinc-800 p-8 rounded-2xl shadow-2xl relative z-10">
-        <div className="text-center mb-8 space-y-2">
-          <div className="inline-flex p-3 bg-blue-600/10 border border-blue-500/20 rounded-2xl text-blue-400 mb-2">
-            <Truck className="w-8 h-8" />
+      {/* FUNDO DECORATIVO */}
+
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -left-40 -top-40 h-80 w-80 rounded-full bg-blue-600/10 blur-3xl"
+      />
+
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-40 -right-40 h-80 w-80 rounded-full bg-indigo-600/10 blur-3xl"
+      />
+
+      {/* CARD */}<section className="relative z-10 w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/90 p-5 shadow-2xl backdrop-blur-xl sm:p-8">
+
+        {/* CABEÇALHO */}
+
+        <header className="mb-8 space-y-2 text-center">
+
+          <div className="mb-2 inline-flex rounded-2xl border border-blue-500/20 bg-blue-600/10 p-3 text-blue-400">
+            <Truck
+              aria-hidden="true"
+              className="h-8 w-8"
+            />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Frota Pro</h1>
-          <p className="text-sm text-zinc-400">Entre com suas credenciais para continuar</p>
-        </div>
+
+          <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+            FrotaPro
+          </h1>
+
+          <p className="text-sm text-zinc-400">
+            Gestão inteligente e segura da sua frota
+          </p>
+
+        </header>
+
+        {/* ERRO */}
 
         {errorMsg && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-xl font-medium animate-in fade-in duration-200">
+          <div
+            role="alert"
+            aria-live="polite"
+            className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-medium text-red-400"
+          >
             {errorMsg}
           </div>
         )}
 
-        <form onSubmit={handleSignIn} className="space-y-4">
+        {/* FORMULÁRIO */}
+
+        <form
+          onSubmit={handleSignIn}
+          className="space-y-5"
+        >
+
+          {/* EMAIL */}
+
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-zinc-400">E-mail</label>
+
+            <label
+              htmlFor="email"
+              className="text-xs font-semibold uppercase tracking-wider text-zinc-400"
+            >
+              E-mail
+            </label>
+
             <div className="relative">
-              <Mail className="absolute left-3.5 top-3.5 w-5 h-5 text-zinc-500" />
+
+              <Mail
+                aria-hidden="true"
+                className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500"
+              />
+
               <input
+                id="email"
+                name="email"
                 type="email"
+                inputMode="email"
+                autoComplete="email"
+                spellCheck={false}
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(event) =>
+                  setEmail(
+                    event.target.value
+                  )
+                }
                 placeholder="seu.email@empresa.com"
-                className="w-full pl-11 pr-4 py-3 bg-zinc-800/80 border border-zinc-700/80 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
+                disabled={loading}
                 required
+                className="w-full rounded-xl border border-zinc-700/80 bg-zinc-800/80 py-3 pl-11 pr-4 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60"
               />
+
             </div>
+
           </div>
-          <div className="space-y-1.5"><label className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Senha</label>
+
+          {/* SENHA */}
+
+          <div className="space-y-1.5">
+
+            <label
+              htmlFor="password"
+              className="text-xs font-semibold uppercase tracking-wider text-zinc-400"
+            >
+              Senha
+            </label>
+
             <div className="relative">
-              <KeyRound className="absolute left-3.5 top-3.5 w-5 h-5 text-zinc-500" />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full pl-11 pr-4 py-3 bg-zinc-800/80 border border-zinc-700/80 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
-                required
+
+              <KeyRound
+                aria-hidden="true"
+                className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500"
               />
+
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) =>
+                  setPassword(
+                    event.target.value
+                  )
+                }
+                placeholder="••••••••"
+                disabled={loading}
+                required
+                className="w-full rounded-xl border border-zinc-700/80 bg-zinc-800/80 py-3 pl-11 pr-4 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+
             </div>
+
           </div>
+
+          {/* BOTÃO */}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-2 py-3.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition duration-150 shadow-lg shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2focus-visible:ring-offset-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
           >
+
             {loading ? (
               <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Autenticando...</span>
+                <Loader2
+                  aria-hidden="true"
+                  className="h-5 w-5 animate-spin"
+                />
+
+                <span>
+                  Autenticando...
+                </span>
               </>
             ) : (
-              <span>Entrar no Sistema</span>
+              <span>
+                Entrar no sistema
+              </span>
             )}
+
           </button>
+
         </form>
 
-        <div className="mt-6 text-center border-t border-zinc-800/80 pt-4 text-xs text-zinc-500">
-          <span className="inline-flex items-center gap-1">
-            <Shield className="w-3.5 h-3.5 text-zinc-400" /> Acesso seguro com RLS & Supabase Auth
+        {/* SEGURANÇA */}
+
+        <footer className="mt-6 border-t border-zinc-800/80 pt-4 text-center text-xs text-zinc-500">
+
+          <span className="inline-flex items-center gap-1.5">
+
+            <Shield
+              aria-hidden="true"
+              className="h-3.5 w-3.5 text-zinc-400"
+            />
+
+            Acesso protegido com Supabase Auth e RLS
+
           </span>
-        </div>
-      </div>
-    </div>
+
+        </footer>
+
+      </section>
+
+    </main>
   )
 }

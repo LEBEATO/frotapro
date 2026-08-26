@@ -1,8 +1,15 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+import {
+  getHomeByRole,
+  normalizeRole,
+} from '@/lib/auth/roles'
+
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
+  let response = NextResponse.next({
+    request,
+  })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,71 +19,163 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll()
         },
+
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
+          cookiesToSet.forEach(({ name, value }) => {
+            request.cookies.set(name, value)
+          })
+
+          response = NextResponse.next({
+            request,
+          })
+
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options)
+          })
         },
       },
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
-  const url = request.nextUrl.clone()
-  const pathname = url.pathname
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  // 1. ROTAS DE CONVITE E REDEFINIÇÃO DE SENHA (LIBERADAS PARA O FLUXO DO E-MAIL)
-  if (pathname.startsWith('/auth/callback') || pathname.startsWith('/reset-password')) {
-    return supabaseResponse
+  const pathname = request.nextUrl.pathname
+  const redirectUrl = request.nextUrl.clone()
+
+  // Rotas que precisam funcionar sem login.
+  const isAuthFlowRoute =
+    pathname.startsWith('/auth/callback') ||
+    pathname.startsWith('/reset-password')
+
+  if (isAuthFlowRoute) {
+    return response
   }
 
-  // 2. SE NÃO TIVER USUÁRIO LOGADO -> FORÇA O LOGIN OBRIGATÓRIO
+  // ==========================================================
+  // USUÁRIO NÃO AUTENTICADO
+  // ==========================================================
+
   if (!user) {
-    if (!pathname.startsWith('/login')) {
-      url.pathname = '/login'
-      return NextResponse.redirect(url)
+    if (pathname.startsWith('/login')) {
+      return response
     }
-    return supabaseResponse
+
+    redirectUrl.pathname = '/login'
+    redirectUrl.search = ''
+
+    return NextResponse.redirect(redirectUrl)
   }
 
-  // 3. USUÁRIO LOGADO -> BUSCA A ROLE E ISOLA OS ACESSOS
-  const { data: profile } = await supabase
+  // ==========================================================
+  // PERFIL
+  // ==========================================================
+
+  const {
+    data: profile,
+    error: profileError,
+  } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, branch_id, active')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
-  const role = profile?.role ?? 'driver'
-  const isGestor = role === 'admin' || role === 'gestor' || role === 'manager'
+  if (
+    profileError ||
+    !profile ||
+    profile.active === false
+  ) {
+    await supabase.auth.signOut()
 
-  const homeDoUsuario = isGestor ? '/admin' : '/driver'
+    redirectUrl.pathname = '/login'
+    redirectUrl.search = '?error=invalid_profile'
 
-  // Se já está logado e tenta abrir a tela de login, manda para a sua Home
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  const role = normalizeRole(profile.role)
+  const home = getHomeByRole(role)
+
+  const isGlobalManager =
+    role === 'admin' ||
+    role === 'fleet_manager'
+
+  const isBranchManager =
+    role === 'branch_manager'
+
+  const isDriver =
+    role === 'driver'
+
+  // ==========================================================
+  // USUÁRIO LOGADO NÃO FICA NO LOGIN
+  // ==========================================================
+
   if (pathname.startsWith('/login')) {
-    url.pathname = homeDoUsuario
-    return NextResponse.redirect(url)
+    redirectUrl.pathname = home
+    redirectUrl.search = ''
+
+    return NextResponse.redirect(redirectUrl)
   }
 
-  // --- REGRAS DE BLOQUEIO CRUZADO ---
+  // ==========================================================
+  // ADMIN / GESTOR GERAL
+  // ==========================================================
 
-  // Motorista tentando entrar na área do Gestor (/admin ou /manager)
-  if ((pathname.startsWith('/admin') || pathname.startsWith('/manager')) && !isGestor) {
-    url.pathname = '/driver'
-    return NextResponse.redirect(url)
+  if (
+    pathname.startsWith('/admin') &&
+    !isGlobalManager
+  ) {
+    redirectUrl.pathname = home
+    redirectUrl.search = ''
+
+    return NextResponse.redirect(redirectUrl)
   }
 
-  // Gestor tentando entrar na área do Motorista (/driver)
-  if (pathname.startsWith('/driver') && isGestor) {
-    url.pathname = '/admin'
-    return NextResponse.redirect(url)
+  // ==========================================================
+  // GESTOR DE BASE
+  // ==========================================================
+
+  if (pathname.startsWith('/manager')) {
+    if (
+      !isBranchManager &&
+      !isGlobalManager
+    ) {
+      redirectUrl.pathname = home
+      redirectUrl.search = ''
+
+      return NextResponse.redirect(redirectUrl)
+    }
+
+    if (
+      isBranchManager &&
+      !profile.branch_id
+    ) {
+      await supabase.auth.signOut()
+
+      redirectUrl.pathname = '/login'
+      redirectUrl.search = '?error=branch_required'
+
+      return NextResponse.redirect(redirectUrl)
+    }
   }
 
-  return supabaseResponse
-}
+  // ==========================================================
+  // MOTORISTA
+  // ==========================================================
 
-export const config = {
+  if (
+    pathname.startsWith('/driver') &&
+    !isDriver
+  ) {
+    redirectUrl.pathname = home
+    redirectUrl.search = ''
+
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  return response
+}export const config = {
   matcher: [
     '/login',
     '/reset-password',
