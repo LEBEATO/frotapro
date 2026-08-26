@@ -1,0 +1,181 @@
+import {
+  BarChart3,
+  Building2,
+  Car,
+  ClipboardCheck,
+  Fuel,
+  Gauge,
+  History,
+  MapPinned,
+  Settings,
+  ShieldCheck,
+  TriangleAlert,
+  Users,
+  Wrench,
+} from 'lucide-react'
+
+import type { UserRole } from '@/types/frotapro'
+
+export type DashboardMenuItem = {
+  label: string
+  href: string
+  icon: React.ComponentType<{
+    className?: string
+  }>
+}
+
+type DashboardMenu = {
+  main: DashboardMenuItem[]
+  system: DashboardMenuItem[]
+}
+
+const adminMenu: DashboardMenu = {
+  main: [
+    {
+      label: 'Visão geral',
+      href: '/admin',
+      icon: Gauge,
+    },
+    {
+      label: 'Estados',
+      href: '/admin/states',
+      icon: MapPinned,
+    },
+    {
+      label: 'Bases e unidades',
+      href: '/admin/branches',
+      icon: Building2,
+    },
+    {
+      label: 'Veículos',
+      href: '/admin/vehicles',
+      icon: Car,
+    },
+    {
+      label: 'Motoristas',
+      href: '/admin/drivers',
+      icon: Users,
+    },
+    {
+      label: 'Checklists',
+      href: '/admin/checklists',
+      icon: ClipboardCheck,
+    },
+    {
+      label: 'Abastecimentos',
+      href: '/admin/fuel',
+      icon: Fuel,
+    },
+    {
+      label: 'Manutenções',
+      href: '/maintenance',
+      icon: Wrench,
+    },
+    {
+      label: 'Relatórios',
+      href: '/admin/reports',
+      icon: BarChart3,
+    },
+  ],
+  system: [
+    {
+      label: 'Auditoria',
+      href: '/admin/audit',
+      icon: ShieldCheck,
+    },
+    {
+      label: 'Configurações',
+      href: '/admin/settings',
+      icon: Settings,
+    },
+  ],
+}
+
+const managerMenu: DashboardMenu = {
+  main: [
+    {
+      label: 'Visão da base',
+      href: '/manager',
+      icon: Gauge,
+    },
+    {
+      label: 'Veículos',
+      href: '/manager/vehicles',
+      icon: Car,
+    },
+    {
+      label: 'Motoristas',
+      href: '/manager/drivers',
+      icon: Users,
+    },
+    {
+      label: 'Checklists',
+      href: '/manager/checklists',
+      icon: ClipboardCheck,
+    },
+    {
+      label: 'Abastecimentos',
+      href: '/manager/fuel',
+      icon: Fuel,
+    },
+    {
+      label: 'Manutenções',
+      href: '/manager/maintenance',
+      icon: Wrench,
+    },
+  ],
+  system: [],
+}
+
+const driverMenu: DashboardMenu = {
+  main: [
+    {
+      label: 'Meu painel',
+      href: '/driver',
+      icon: Gauge,
+    },
+    {
+      label: 'Meu veículo',
+      href: '/driver/vehicle',
+      icon: Car,
+    },
+    {
+      label: 'Checklist diário',
+      href: '/driver/checklist',
+      icon: ClipboardCheck,
+    },
+    {
+      label: 'Abastecimento',
+      href: '/driver/fuel',
+      icon: Fuel,
+    },
+    {
+      label: 'Ocorrências',
+      href: '/driver/issues',
+      icon: TriangleAlert,
+    },
+    {
+      label: 'Histórico',
+      href: '/driver/history',
+      icon: History,
+    },
+  ],
+  system: [],
+}
+
+export function getDashboardMenu(
+  role: UserRole
+): DashboardMenu {
+  if (
+    role === 'admin' ||
+    role === 'fleet_manager'
+  ) {
+    return adminMenu
+  }
+
+  if (role === 'branch_manager') {
+    return managerMenu
+  }
+
+  return driverMenu
+}
