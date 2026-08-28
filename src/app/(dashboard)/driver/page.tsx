@@ -347,7 +347,9 @@ export default function DriverPage() {
 
     if (preview) {
       URL.revokeObjectURL(preview)
-    }setPhotos((current) =>
+    }
+
+    setPhotos((current) =>
       current.filter(
         (_, itemIndex) => itemIndex !== index
       )
@@ -523,7 +525,8 @@ export default function DriverPage() {
 
       const hasIssue =
         itensComDefeito.length > 0
-        let observacaoFinal =
+
+      let observacaoFinal =
         data.observacoes?.trim() ?? ''
 
       if (hasIssue) {
@@ -596,90 +599,16 @@ export default function DriverPage() {
       }
 
       // =====================================================
-      // ATUALIZAR VEÍCULO
+      // SINCRONIZAÇÃO PELO BANCO
       // =====================================================
-
-      const updatePayload:
-        Record<string, unknown> = {
-          mileage: currentKm,
-          updated_at:
-            new Date().toISOString(),
-        }
-
-      if (hasIssue) {
-        updatePayload.status =
-          'Manutenção'
-
-        updatePayload.issues =
-          observacaoFinal
-      }
-
-      const {
-        error: updateVehicleError,
-      } = await supabase
-        .from('vehicles')
-        .update(updatePayload)
-        .eq('id', vehicle.id)
-
-      if (updateVehicleError) {
-        console.error(
-          'Erro ao atualizar veículo:',
-          updateVehicleError
-        )
-      }
-
-      // =====================================================
-      // CRIAR MANUTENÇÃO SE HOUVER OCORRÊNCIA
-      // =====================================================
-
-      if (hasIssue) {
-        const {
-          error: maintenanceError,
-        } = await supabase
-          .from('maintenance_records')
-          .insert({
-            vehicle_id:
-              vehicle.id,
-
-            branch_id:
-              vehicle.current_branch_id,
-
-            vehicle_plate:
-              vehicle.plate.toUpperCase(),
-
-            opened_by:
-              user.id,
-
-            mechanic_name:
-              'Aguardando Atribuição',
-
-            service_description:
-              `Manutenção necessária identificada na inspeção: ${itensComDefeito.join(
-                ', '
-              )}`,
-
-            maintenance_type:
-              'corretiva',
-
-            mileage:
-              currentKm,
-
-            cost: 0,
-            labor_cost: 0,
-            parts_cost: 0,
-            total_cost: 0,
-
-            notes:
-              `${observacaoFinal}`,
-          })
-
-        if (maintenanceError) {
-          console.error(
-            'Erro ao criar manutenção:',
-            maintenanceError
-          )
-        }
-      }
+      //
+      // O trigger do Supabase atualiza automaticamente:
+      // - vehicles.mileage
+      // - vehicles.status
+      // - vehicles.issues
+      // - maintenance_records quando houver ocorrência
+      //
+      // Aqui o motorista grava apenas o checklist.
 
       // =====================================================
       // SUCESSO
@@ -691,33 +620,28 @@ export default function DriverPage() {
           : 'Checklist enviado com sucesso! Boa viagem.'
       )
 
-      photoPreviews.forEach(
-        (url) =>
-          URL.revokeObjectURL(url)
+      photoPreviews.forEach((url) =>
+        URL.revokeObjectURL(url)
       )
 
       setPhotos([])
       setPhotoPreviews([])
+
       setVehicle((current) =>
         current
           ? {
               ...current,
               mileage: currentKm,
-              status:
-                hasIssue
-                  ? 'Manutenção'
-                  : current.status,
+              status: hasIssue
+                ? 'Manutenção'
+                : current.status,
             }
           : null
       )
 
       reset({
-        vehiclePlate:
-          vehicle.plate,
-
-        kmAtual:
-          String(currentKm),
-
+        vehiclePlate: vehicle.plate,
+        kmAtual: String(currentKm),
         observacoes: '',
       })
     } catch (error: unknown) {
