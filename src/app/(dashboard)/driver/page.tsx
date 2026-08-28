@@ -449,11 +449,12 @@ export default function DriverPage() {
         previousKm > 0 &&
         kmDifference > 2000
       ) {
-        throw new Error(
+        setErrorMsg(
           `O KM informado está ${kmDifference.toLocaleString(
             'pt-BR'
           )} km acima do último registro. Confira o hodômetro antes de enviar o checklist.`
         )
+        return
       }
 
       // =====================================================
