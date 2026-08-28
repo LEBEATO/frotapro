@@ -6,7 +6,7 @@ import {
   normalizeRole,
 } from '@/lib/auth/roles'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
     request,
   })
@@ -37,26 +37,22 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  const pathname = request.nextUrl.pathname
+  const redirectUrl = request.nextUrl.clone()
+
+  // Callback e recuperação de senha continuam públicos
+  if (
+    pathname.startsWith('/auth/callback') ||
+    pathname.startsWith('/reset-password')
+  ) {
+    return response
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const pathname = request.nextUrl.pathname
-  const redirectUrl = request.nextUrl.clone()
-
-  // Rotas que precisam funcionar sem login.
-  const isAuthFlowRoute =
-    pathname.startsWith('/auth/callback') ||
-    pathname.startsWith('/reset-password')
-
-  if (isAuthFlowRoute) {
-    return response
-  }
-
-  // ==========================================================
-  // USUÁRIO NÃO AUTENTICADO
-  // ==========================================================
-
+  // Usuário não autenticado
   if (!user) {
     if (pathname.startsWith('/login')) {
       return response
@@ -68,10 +64,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
-  // ==========================================================
-  // PERFIL
-  // ==========================================================
-
+  // Perfil do usuário
   const {
     data: profile,
     error: profileError,
@@ -107,10 +100,7 @@ export async function middleware(request: NextRequest) {
   const isDriver =
     role === 'driver'
 
-  // ==========================================================
-  // USUÁRIO LOGADO NÃO FICA NO LOGIN
-  // ==========================================================
-
+  // Usuário logado não fica no login
   if (pathname.startsWith('/login')) {
     redirectUrl.pathname = home
     redirectUrl.search = ''
@@ -118,10 +108,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
-  // ==========================================================
-  // ADMIN / GESTOR GERAL
-  // ==========================================================
-
+  // /admin → somente admin e fleet_manager
   if (
     pathname.startsWith('/admin') &&
     !isGlobalManager
@@ -132,10 +119,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
-  // ==========================================================
-  // GESTOR DE BASE
-  // ==========================================================
-
+  // /manager → branch_manager ou gestão global
   if (pathname.startsWith('/manager')) {
     if (
       !isBranchManager &&
@@ -160,10 +144,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // ==========================================================
-  // MOTORISTA
-  // ==========================================================
-
+  // /driver → somente motorista
   if (
     pathname.startsWith('/driver') &&
     !isDriver
@@ -175,7 +156,9 @@ export async function middleware(request: NextRequest) {
   }
 
   return response
-}export const config = {
+}
+
+export const config = {
   matcher: [
     '/login',
     '/reset-password',
