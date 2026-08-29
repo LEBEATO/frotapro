@@ -1,5 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import {
+  NextResponse,
+  type NextRequest,
+} from 'next/server'
 
 import {
   getHomeByRole,
@@ -20,27 +23,50 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll()
         },
 
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => {
-            request.cookies.set(name, value)
-          })
+        setAll(cookiesToSet, headers) {
+          cookiesToSet.forEach(
+            ({ name, value }) => {
+              request.cookies.set(name, value)
+            }
+          )
 
           response = NextResponse.next({
             request,
           })
 
-          cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options)
-          })
+          cookiesToSet.forEach(
+            ({ name, value, options }) => {
+              response.cookies.set(
+                name,
+                value,
+                options
+              )
+            }
+          )
+
+          Object.entries(headers ?? {}).forEach(
+            ([key, value]) => {
+              response.headers.set(
+                key,
+                String(value)
+              )
+            }
+          )
         },
       },
     }
   )
 
-  const pathname = request.nextUrl.pathname
-  const redirectUrl = request.nextUrl.clone()
+  const pathname =
+    request.nextUrl.pathname
 
-  // Callback e recuperação de senha continuam públicos
+  const redirectUrl =
+    request.nextUrl.clone()
+
+  // =====================================================
+  // ROTAS PÚBLICAS
+  // =====================================================
+
   if (
     pathname.startsWith('/auth/callback') ||
     pathname.startsWith('/reset-password')
@@ -48,31 +74,58 @@ export async function proxy(request: NextRequest) {
     return response
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // =====================================================
+  // VALIDAR TOKEN / IDENTIDADE
+  // =====================================================
 
-  // Usuário não autenticado
-  if (!user) {
-    if (pathname.startsWith('/login')) {
+  const {
+    data: claimsData,
+    error: claimsError,
+  } = await supabase.auth.getClaims()
+
+  const userId =
+    claimsData?.claims?.sub
+
+  // =====================================================
+  // USUÁRIO NÃO AUTENTICADO
+  // =====================================================
+
+  if (
+    claimsError ||
+    !userId
+  ) {
+    if (
+      pathname.startsWith('/login')
+    ) {
       return response
     }
 
     redirectUrl.pathname = '/login'
     redirectUrl.search = ''
 
-    return NextResponse.redirect(redirectUrl)
+    return NextResponse.redirect(
+      redirectUrl
+    )
   }
 
-  // Perfil do usuário
+  // =====================================================
+  // BUSCAR PERFIL
+  // =====================================================
+
   const {
     data: profile,
     error: profileError,
   } = await supabase
     .from('profiles')
-    .select('role, branch_id, active')
-    .eq('id', user.id)
+    .select(
+      'role, branch_id, active'
+    )
+    .eq('id', userId)
     .maybeSingle()
+
+  // =====================================================
+  // PERFIL INVÁLIDO OU DESATIVADO
+  // =====================================================
 
   if (
     profileError ||
@@ -82,13 +135,23 @@ export async function proxy(request: NextRequest) {
     await supabase.auth.signOut()
 
     redirectUrl.pathname = '/login'
-    redirectUrl.search = '?error=invalid_profile'
+    redirectUrl.search =
+      '?error=invalid_profile'
 
-    return NextResponse.redirect(redirectUrl)
+    return NextResponse.redirect(
+      redirectUrl
+    )
   }
 
-  const role = normalizeRole(profile.role)
-  const home = getHomeByRole(role)
+  // =====================================================
+  // ROLE
+  // =====================================================
+
+  const role =
+    normalizeRole(profile.role)
+
+  const home =
+    getHomeByRole(role)
 
   const isGlobalManager =
     role === 'admin' ||
@@ -100,15 +163,26 @@ export async function proxy(request: NextRequest) {
   const isDriver =
     role === 'driver'
 
-  // Usuário logado não fica no login
-  if (pathname.startsWith('/login')) {
+  // =====================================================
+  // USUÁRIO LOGADO NÃO FICA NO LOGIN
+  // =====================================================
+
+  if (
+    pathname.startsWith('/login')
+  ) {
     redirectUrl.pathname = home
     redirectUrl.search = ''
 
-    return NextResponse.redirect(redirectUrl)
+    return NextResponse.redirect(
+      redirectUrl
+    )
   }
 
-  // /admin → somente admin e fleet_manager
+  // =====================================================
+  // /admin
+  // somente admin e fleet_manager
+  // =====================================================
+
   if (
     pathname.startsWith('/admin') &&
     !isGlobalManager
@@ -116,11 +190,19 @@ export async function proxy(request: NextRequest) {
     redirectUrl.pathname = home
     redirectUrl.search = ''
 
-    return NextResponse.redirect(redirectUrl)
+    return NextResponse.redirect(
+      redirectUrl
+    )
   }
 
-  // /manager → branch_manager ou gestão global
-  if (pathname.startsWith('/manager')) {
+  // =====================================================
+  // /manager
+  // branch_manager ou gestão global
+  // =====================================================
+
+  if (
+    pathname.startsWith('/manager')
+  ) {
     if (
       !isBranchManager &&
       !isGlobalManager
@@ -128,23 +210,36 @@ export async function proxy(request: NextRequest) {
       redirectUrl.pathname = home
       redirectUrl.search = ''
 
-      return NextResponse.redirect(redirectUrl)
+      return NextResponse.redirect(
+        redirectUrl
+      )
     }
 
+    // Gestor de base precisa obrigatoriamente
+    // estar vinculado a uma base.
     if (
       isBranchManager &&
       !profile.branch_id
     ) {
       await supabase.auth.signOut()
 
-      redirectUrl.pathname = '/login'
-      redirectUrl.search = '?error=branch_required'
+      redirectUrl.pathname =
+        '/login'
 
-      return NextResponse.redirect(redirectUrl)
+      redirectUrl.search =
+        '?error=branch_required'
+
+      return NextResponse.redirect(
+        redirectUrl
+      )
     }
   }
 
-  // /driver → somente motorista
+  // =====================================================
+  // /driver
+  // somente motorista
+  // =====================================================
+
   if (
     pathname.startsWith('/driver') &&
     !isDriver
@@ -152,7 +247,9 @@ export async function proxy(request: NextRequest) {
     redirectUrl.pathname = home
     redirectUrl.search = ''
 
-    return NextResponse.redirect(redirectUrl)
+    return NextResponse.redirect(
+      redirectUrl
+    )
   }
 
   return response
