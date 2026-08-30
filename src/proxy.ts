@@ -69,6 +69,8 @@ export async function proxy(request: NextRequest) {
 
   if (
     pathname.startsWith('/auth/callback') ||
+    pathname.startsWith('/auth/confirm') ||
+    pathname.startsWith('/auth/accept-invite') ||
     pathname.startsWith('/reset-password')
   ) {
     return response
@@ -260,6 +262,8 @@ export const config = {
     '/login',
     '/reset-password',
     '/auth/callback',
+    '/auth/confirm',
+    '/auth/accept-invite',
     '/admin/:path*',
     '/manager/:path*',
     '/driver/:path*',

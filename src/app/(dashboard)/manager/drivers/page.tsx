@@ -10,6 +10,7 @@ import {
   Mail,
   RefreshCw,
   Search,
+  UserPlus,
   UserRound,
   Users,
 } from 'lucide-react'
@@ -333,20 +334,31 @@ export default function ManagerDriversPage() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => void loadData()}
-            disabled={loading}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <RefreshCw
-              className={[
-                'h-4 w-4',
-                loading ? 'animate-spin' : '',
-              ].join(' ')}
-            />
-            Atualizar
-          </button>
+          {/* AÇÕES */}
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/manager/drivers/new"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
+            >
+              <UserPlus className="h-4 w-4" />
+              Novo motorista
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => void loadData()}
+              disabled={loading}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw
+                className={[
+                  'h-4 w-4',
+                  loading ? 'animate-spin' : '',
+                ].join(' ')}
+              />
+              Atualizar
+            </button>
+          </div>
         </section>
 
         {/* BASE */}
