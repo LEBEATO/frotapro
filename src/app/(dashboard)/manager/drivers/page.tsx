@@ -283,7 +283,7 @@ export default function NewDriverPage() {
         ===================================================== */}
         <section className="flex items-start gap-3">
           <Link
-            href="/manager/drivers"
+            href="/manager"
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 transition hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
             aria-label="Voltar para motoristas"
           >
