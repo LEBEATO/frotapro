@@ -52,11 +52,15 @@ type Vehicle = {
   status: string | null
   mileage: number | null
   current_branch_id: string | null
+  issues: string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 type MaintenanceView = MaintenanceRecord & {
   vehicle_model: string | null
   vehicle_status: string | null
+  virtual: boolean
 }
 
 export default function ManagerMaintenancePage() {
@@ -120,36 +124,60 @@ export default function ManagerMaintenancePage() {
         return
       }
 
-      if (!profile.branch_id) {
-        showToast('O gestor não está vinculado a uma base.', 'error')
+      const isGlobalManager =
+        profile.role === 'admin' ||
+        profile.role === 'fleet_manager'
+
+      const isBranchManager =
+        profile.role === 'branch_manager'
+
+      if (!isGlobalManager && !isBranchManager) {
+        showToast(
+          'Você não tem permissão para acessar as manutenções.',
+          'error'
+        )
+        setRecords([])
+        return
+      }
+
+      if (isBranchManager && !profile.branch_id) {
+        showToast(
+          'O gestor não está vinculado a uma base.',
+          'error'
+        )
         setRecords([])
         return
       }
 
       const branchId = profile.branch_id
 
-      const {
-        data: branch,
-      } = await supabase
-        .from('branches')
-        .select('name')
-        .eq('id', branchId)
-        .maybeSingle()
+      if (isGlobalManager) {
+        setBranchName('Visão global')
+      } else if (branchId) {
+        const {
+          data: branch,
+        } = await supabase
+          .from('branches')
+          .select('name')
+          .eq('id', branchId)
+          .maybeSingle()
 
-      if (branch?.name) {
-        setBranchName(branch.name)
+        if (branch?.name) {
+          setBranchName(branch.name)
+        }
       }
 
       // =====================================================
-      // 3. MANUTENÇÕES SOMENTE DA BASE DO GESTOR
+      // 3. BUSCAR MANUTENÇÕES ABERTAS + VEÍCULOS EM MANUTENÇÃO
       // =====================================================
-      // O completed_at.is.null também cobre registros antigos
-      // que foram gravados com status='completed' por causa do
-      // default antigo do banco, mas ainda não foram concluídos.
-      const {
-        data: maintenanceData,
-        error: maintenanceError,
-      } = await supabase
+      // A tela usa duas fontes:
+      // 1) maintenance_records
+      // 2) vehicles.status = 'Manutenção'
+      //
+      // Assim, um veículo marcado como manutenção continua
+      // aparecendo mesmo se ainda não existir registro em
+      // maintenance_records.
+      let maintenanceQuery = supabase
         .from('maintenance_records')
         .select(
           `
@@ -170,63 +198,120 @@ export default function ManagerMaintenancePage() {
           created_at
           `
         )
-        .eq('branch_id', branchId)
-        .or('status.eq.pending,status.eq.in_progress,completed_at.is.null')
+        .or(
+          'status.eq.pending,status.eq.in_progress,completed_at.is.null'
+        )
         .order('started_at', { ascending: false })
 
-      if (maintenanceError) {
+      let maintenanceVehiclesQuery = supabase
+        .from('vehicles')
+        .select(
+          'id, plate, model, status, mileage, current_branch_id, issues, created_at, updated_at'
+        )
+        .eq('status', 'Manutenção')
+
+      if (!isGlobalManager && branchId) {
+        maintenanceQuery =
+          maintenanceQuery.eq('branch_id', branchId)
+
+        maintenanceVehiclesQuery =
+          maintenanceVehiclesQuery.eq(
+            'current_branch_id',
+            branchId
+          )
+      }
+
+      const [
+        maintenanceResponse,
+        maintenanceVehiclesResponse,
+      ] = await Promise.all([
+        maintenanceQuery,
+        maintenanceVehiclesQuery,
+      ])
+
+      if (maintenanceResponse.error) {
         console.error(
           'Erro ao buscar manutenções:',
-          maintenanceError
+          maintenanceResponse.error
         )
         showToast(
-          `Erro ao buscar manutenções: ${maintenanceError.message}`,
+          `Erro ao buscar manutenções: ${maintenanceResponse.error.message}`,
           'error'
         )
         return
       }
 
-      const maintenance = (maintenanceData ?? []) as MaintenanceRecord[]
-
-      if (maintenance.length === 0) {
-        setRecords([])
+      if (maintenanceVehiclesResponse.error) {
+        console.error(
+          'Erro ao buscar veículos em manutenção:',
+          maintenanceVehiclesResponse.error
+        )
+        showToast(
+          `Erro ao buscar veículos em manutenção: ${maintenanceVehiclesResponse.error.message}`,
+          'error'
+        )
         return
       }
 
+      const maintenance =
+        (maintenanceResponse.data ?? []) as MaintenanceRecord[]
+
+      const maintenanceVehicles =
+        (maintenanceVehiclesResponse.data ?? []) as Vehicle[]
+
       // =====================================================
-      // 4. BUSCAR DADOS DOS VEÍCULOS DA MESMA BASE
+      // 4. COMPLETAR DADOS DOS VEÍCULOS REFERENCIADOS
       // =====================================================
-      const vehicleIds = Array.from(
+      const alreadyLoadedVehicleIds = new Set(
+        maintenanceVehicles.map((vehicle) => vehicle.id)
+      )
+
+      const missingVehicleIds = Array.from(
         new Set(
           maintenance
             .map((item) => item.vehicle_id)
             .filter((id): id is string => Boolean(id))
+            .filter((id) => !alreadyLoadedVehicleIds.has(id))
         )
       )
 
-      let vehicles: Vehicle[] = []
+      let extraVehicles: Vehicle[] = []
 
-      if (vehicleIds.length > 0) {
-        const {
-          data: vehicleData,
-          error: vehicleError,
-        } = await supabase
+      if (missingVehicleIds.length > 0) {
+        let extraVehicleQuery = supabase
           .from('vehicles')
           .select(
-            'id, plate, model, status, mileage, current_branch_id'
+            'id, plate, model, status, mileage, current_branch_id, issues, created_at, updated_at'
           )
-          .eq('current_branch_id', branchId)
-          .in('id', vehicleIds)
+          .in('id', missingVehicleIds)
 
-        if (vehicleError) {
+        if (!isGlobalManager && branchId) {
+          extraVehicleQuery =
+            extraVehicleQuery.eq(
+              'current_branch_id',
+              branchId
+            )
+        }
+
+        const {
+          data: extraVehicleData,
+          error: extraVehicleError,
+        } = await extraVehicleQuery
+
+        if (extraVehicleError) {
           console.error(
-            'Erro ao buscar veículos das manutenções:',
-            vehicleError
+            'Erro ao buscar veículos vinculados às manutenções:',
+            extraVehicleError
           )
         } else {
-          vehicles = (vehicleData ?? []) as Vehicle[]
+          extraVehicles = (extraVehicleData ?? []) as Vehicle[]
         }
       }
+
+      const vehicles = [
+        ...maintenanceVehicles,
+        ...extraVehicles,
+      ]
 
       const vehiclesById = new Map(
         vehicles.map((vehicle) => [vehicle.id, vehicle])
@@ -242,11 +327,66 @@ export default function ManagerMaintenancePage() {
             ...record,
             vehicle_model: vehicle?.model ?? null,
             vehicle_status: vehicle?.status ?? null,
+            virtual: false,
           }
         }
       )
 
-      setRecords(normalized)
+      // =====================================================
+      // 5. CRIAR ENTRADA VISUAL PARA VEÍCULOS SEM REGISTRO
+      // =====================================================
+      const vehiclesWithOpenRecord = new Set(
+        maintenance
+          .map((record) => record.vehicle_id)
+          .filter((id): id is string => Boolean(id))
+      )
+
+      const virtualRecords: MaintenanceView[] =
+        maintenanceVehicles
+          .filter(
+            (vehicle) =>
+              !vehiclesWithOpenRecord.has(vehicle.id)
+          )
+          .map((vehicle) => {
+            const startedAt =
+              vehicle.updated_at ??
+              vehicle.created_at ??
+              new Date().toISOString()
+
+            return {
+              id: `vehicle:${vehicle.id}`,
+              vehicle_id: vehicle.id,
+              vehicle_plate: vehicle.plate,
+              branch_id: vehicle.current_branch_id,
+              opened_by: null,
+              mechanic_name: 'Não informado',
+              service_description:
+                vehicle.issues ??
+                'Veículo marcado como em manutenção.',
+              maintenance_type: 'Ocorrência operacional',
+              mileage: vehicle.mileage,
+              status: 'pending',
+              notes: vehicle.issues,
+              workshop: null,
+              started_at: startedAt,
+              completed_at: null,
+              created_at: vehicle.created_at,
+              vehicle_model: vehicle.model,
+              vehicle_status: vehicle.status,
+              virtual: true,
+            }
+          })
+
+      const allRecords = [
+        ...normalized,
+        ...virtualRecords,
+      ].sort(
+        (a, b) =>
+          new Date(b.started_at).getTime() -
+          new Date(a.started_at).getTime()
+      )
+
+      setRecords(allRecords)
     } catch (error) {
       console.error(
         'Erro inesperado ao carregar manutenções:',
@@ -275,45 +415,55 @@ export default function ManagerMaintenancePage() {
       const now = new Date().toISOString()
 
       // =====================================================
-      // 1. CONCLUIR O REGISTRO REAL DE MANUTENÇÃO
+      // 1. CONCLUIR REGISTRO REAL, QUANDO EXISTIR
       // =====================================================
-      const {
-        error: maintenanceError,
-      } = await supabase
-        .from('maintenance_records')
-        .update({
-          status: 'completed',
-          completed_at: now,
-          updated_at: now,
-        })
-        .eq('id', record.id)
+      if (!record.virtual) {
+        const {
+          error: maintenanceError,
+        } = await supabase
+          .from('maintenance_records')
+          .update({
+            status: 'completed',
+            completed_at: now,
+            updated_at: now,
+          })
+          .eq('id', record.id)
 
-      if (maintenanceError) {
-        throw maintenanceError
+        if (maintenanceError) {
+          throw maintenanceError
+        }
       }
 
       // =====================================================
-      // 2. VERIFICAR SE O VEÍCULO AINDA TEM OUTRA PENDÊNCIA
+      // 2. VERIFICAR OUTRAS PENDÊNCIAS DO VEÍCULO
       // =====================================================
       if (record.vehicle_id) {
-        const {
-          data: otherPending,
-          error: otherPendingError,
-        } = await supabase
-          .from('maintenance_records')
-          .select('id')
-          .eq('vehicle_id', record.vehicle_id)
-          .neq('id', record.id)
-          .or('status.eq.pending,status.eq.in_progress,completed_at.is.null')
-          .limit(1)
+        let hasOtherPending = false
 
-        if (otherPendingError) {
-          throw otherPendingError
+        if (!record.virtual) {
+          const {
+            data: otherPending,
+            error: otherPendingError,
+          } = await supabase
+            .from('maintenance_records')
+            .select('id')
+            .eq('vehicle_id', record.vehicle_id)
+            .neq('id', record.id)
+            .or('status.eq.pending,status.eq.in_progress,completed_at.is.null')
+            .limit(1)
+
+          if (otherPendingError) {
+            throw otherPendingError
+          }
+
+          hasOtherPending =
+            Boolean(otherPending && otherPending.length > 0)
         }
 
-        // Só libera o veículo quando não existir outra
-        // manutenção pendente/em andamento.
-        if (!otherPending || otherPending.length === 0) {
+        // Registro virtual significa que o veículo estava marcado
+        // como manutenção sem uma linha correspondente na tabela.
+        // Nesse caso, concluir libera diretamente o veículo.
+        if (!hasOtherPending) {
           const {
             error: vehicleError,
           } = await supabase
@@ -433,7 +583,9 @@ export default function ManagerMaintenancePage() {
               </h1>
 
               <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-                Acompanhe somente os veículos e manutenções pertencentes à sua base.
+                {branchName === 'Visão global'
+                  ? 'Acompanhe as manutenções de todas as bases da frota.'
+                  : 'Acompanhe somente os veículos e manutenções pertencentes à sua base.'}
               </p>
             </div>
           </div>

@@ -10,6 +10,7 @@ import {
   Settings,
   ShieldCheck,
   TriangleAlert,
+  UserCog,
   Users,
   Wrench,
 } from 'lucide-react'
@@ -47,6 +48,11 @@ const adminMenu: DashboardMenu = {
       icon: Building2,
     },
     {
+      label: 'Gestores',
+      href: '/admin/managers',
+      icon: UserCog,
+    },
+    {
       label: 'Veículos',
       href: '/admin/vehicles',
       icon: Car,
@@ -77,6 +83,7 @@ const adminMenu: DashboardMenu = {
       icon: BarChart3,
     },
   ],
+
   system: [
     {
       label: 'Auditoria',
@@ -120,10 +127,11 @@ const managerMenu: DashboardMenu = {
     },
     {
       label: 'Manutenções',
-      href: '/manager/maintenance',
+      href: '/maintenance',
       icon: Wrench,
     },
   ],
+
   system: [],
 }
 
@@ -160,6 +168,7 @@ const driverMenu: DashboardMenu = {
       icon: History,
     },
   ],
+
   system: [],
 }
 
