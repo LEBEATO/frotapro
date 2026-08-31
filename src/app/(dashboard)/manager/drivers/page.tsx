@@ -10,6 +10,7 @@ import {
   Mail,
   RefreshCw,
   Search,
+  Send,
   UserPlus,
   UserRound,
   Users,
@@ -64,6 +65,8 @@ export default function ManagerDriversPage() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
+  const [resendingId, setResendingId] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -302,6 +305,39 @@ export default function ManagerDriversPage() {
   const unassignedDrivers =
     drivers.length - assignedDrivers
 
+  async function handleResendInvite(driverId: string) {
+    setErrorMessage('')
+    setSuccessMessage('')
+    setResendingId(driverId)
+
+    try {
+      const response = await fetch(
+        `/api/manager/drivers/${driverId}/resend-invite`,
+        { method: 'POST' }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ?? 'Não foi possível reenviar o convite.'
+        )
+      }
+
+      setSuccessMessage(
+        data.message ?? 'Convite reenviado com sucesso.'
+      )
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível reenviar o convite.'
+      )
+    } finally {
+      setResendingId(null)
+    }
+  }
+
   return (
     <AppShell>
       <div className="space-y-6 sm:space-y-8">
@@ -436,6 +472,12 @@ export default function ManagerDriversPage() {
           </div>
         )}
 
+        {successMessage && (
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-400">
+            {successMessage}
+          </div>
+        )}
+
         {/* LISTAGEM */}
         {loading ? (
           <div className="flex min-h-64 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/60">
@@ -549,6 +591,25 @@ export default function ManagerDriversPage() {
                       </p>
                     </div>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={() => void handleResendInvite(driver.id)}
+                    disabled={resendingId === driver.id}
+                    className="mt-5 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-300 transition hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {resendingId === driver.id ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4" />
+                        Reenviar convite
+                      </>
+                    )}
+                  </button>
                 </article>
               )
             })}
