@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+
 import {
   KeyRound,
   Loader2,
@@ -14,6 +15,7 @@ import {
   getHomeByRole,
   normalizeRole,
 } from '@/lib/auth/roles'
+
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
@@ -23,7 +25,11 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState('')
 
   const router = useRouter()
-  const supabase = createClient()
+
+  const supabase = useMemo(
+    () => createClient(),
+    []
+  )
 
   async function handleSignIn(
     event: React.FormEvent<HTMLFormElement>
@@ -54,11 +60,64 @@ export default function LoginPage() {
         password,
       })
 
-      if (error || !data.user) {
+      // ======================================================
+      // MOSTRAR O ERRO REAL DO SUPABASE
+      // ======================================================
+
+      if (error) {
+        console.error(
+          'ERRO REAL DO SUPABASE LOGIN:',
+          {
+            message: error.message,
+            status: error.status,
+            code: error.code,
+            name: error.name,
+          }
+        )
+
+        if (
+          error.message
+            .toLowerCase()
+            .includes('invalid login credentials')
+        ) {
+          throw new Error(
+            'O Supabase recusou o login: credenciais inválidas. Verifique a senha desse usuário no Supabase Auth.'
+          )
+        }
+
+        if (
+          error.message
+            .toLowerCase()
+            .includes('email not confirmed')
+        ) {
+          throw new Error(
+            'Este e-mail ainda não foi confirmado no Supabase.'
+          )
+        }
+
         throw new Error(
-          'E-mail ou senha incorretos.'
+          `Erro do Supabase: ${error.message}`
         )
       }
+
+      if (!data.user) {
+        console.error(
+          'LOGIN SEM USUÁRIO:',
+          data
+        )
+
+        throw new Error(
+          'A autenticação não retornou um usuário.'
+        )
+      }
+
+      console.log(
+        'LOGIN SUPABASE OK:',
+        {
+          id: data.user.id,
+          email: data.user.email,
+        }
+      )
 
       // ======================================================
       // 2. BUSCAR PERFIL
@@ -72,25 +131,61 @@ export default function LoginPage() {
         .select(
           'id, full_name, role, branch_id, active'
         )
-        .eq('id', data.user.id)
+        .eq(
+          'id',
+          data.user.id
+        )
         .maybeSingle()
+
+      // ======================================================
+      // MOSTRAR ERRO REAL DO PERFIL
+      // ======================================================
+
+      if (profileError) {
+        console.error(
+          'ERRO AO BUSCAR PROFILE:',
+          {
+            message:
+              profileError.message,
+
+            code:
+              profileError.code,
+
+            details:
+              profileError.details,
+
+            hint:
+              profileError.hint,
+          }
+        )
+
+        await supabase.auth.signOut()
+
+        throw new Error(
+          `Erro ao carregar perfil: ${profileError.message}`
+        )
+      }
+
+      if (!profile) {
+        console.error(
+          'PROFILE NÃO ENCONTRADO PARA:',
+          data.user.id
+        )
+
+        await supabase.auth.signOut()
+
+        throw new Error(
+          'O login no Supabase funcionou, mas não existe um perfil correspondente na tabela profiles.'
+        )
+      }
 
       // ======================================================
       // 3. VALIDAR PERFIL
       // ======================================================
 
       if (
-        profileError ||
-        !profile
+        profile.active === false
       ) {
-        await supabase.auth.signOut()
-
-        throw new Error(
-          'Perfil de usuário não encontrado.'
-        )
-      }
-
-      if (profile.active === false) {
         await supabase.auth.signOut()
 
         throw new Error(
@@ -102,16 +197,32 @@ export default function LoginPage() {
       // 4. NORMALIZAR PERMISSÃO
       // ======================================================
 
-      const role = normalizeRole(
-        profile.role
+      const role =
+        normalizeRole(
+          profile.role
+        )
+
+      console.log(
+        'PERFIL DO USUÁRIO:',
+        {
+          id: profile.id,
+          full_name:
+            profile.full_name,
+          role,
+          branch_id:
+            profile.branch_id,
+          active:
+            profile.active,
+        }
       )
 
       // ======================================================
-      // 5. GESTOR DE BASE PRECISA POSSUIR BASE
+      // 5. GESTOR PRECISA TER BASE
       // ======================================================
 
       if (
-        role === 'branch_manager' &&
+        role ===
+          'branch_manager' &&
         !profile.branch_id
       ) {
         await supabase.auth.signOut()
@@ -128,15 +239,34 @@ export default function LoginPage() {
       const destination =
         getHomeByRole(role)
 
+      console.log(
+        'REDIRECIONANDO PARA:',
+        destination
+      )
+
       // ======================================================
       // 7. REDIRECIONAR
       // ======================================================
 
-      router.replace(destination)
+      router.replace(
+        destination
+      )
+
       router.refresh()
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        setErrorMsg(error.message)
+    } catch (
+      error: unknown
+    ) {
+      console.error(
+        'ERRO FINAL NO LOGIN:',
+        error
+      )
+
+      if (
+        error instanceof Error
+      ) {
+        setErrorMsg(
+          error.message
+        )
       } else {
         setErrorMsg(
           'Não foi possível realizar o login. Tente novamente.'
@@ -162,17 +292,21 @@ export default function LoginPage() {
         className="pointer-events-none absolute -bottom-40 -right-40 h-80 w-80 rounded-full bg-indigo-600/10 blur-3xl"
       />
 
-      {/* CARD */}<section className="relative z-10 w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/90 p-5 shadow-2xl backdrop-blur-xl sm:p-8">
+      {/* CARD */}
+
+      <section className="relative z-10 w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/90 p-5 shadow-2xl backdrop-blur-xl sm:p-8">
 
         {/* CABEÇALHO */}
 
         <header className="mb-8 space-y-2 text-center">
 
           <div className="mb-2 inline-flex rounded-2xl border border-blue-500/20 bg-blue-600/10 p-3 text-blue-400">
+
             <Truck
               aria-hidden="true"
               className="h-8 w-8"
             />
+
           </div>
 
           <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
@@ -200,7 +334,9 @@ export default function LoginPage() {
         {/* FORMULÁRIO */}
 
         <form
-          onSubmit={handleSignIn}
+          onSubmit={
+            handleSignIn
+          }
           className="space-y-5"
         >
 
@@ -236,7 +372,9 @@ export default function LoginPage() {
                   )
                 }
                 placeholder="seu.email@empresa.com"
-                disabled={loading}
+                disabled={
+                  loading
+                }
                 required
                 className="w-full rounded-xl border border-zinc-700/80 bg-zinc-800/80 py-3 pl-11 pr-4 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60"
               />
@@ -268,14 +406,18 @@ export default function LoginPage() {
                 name="password"
                 type="password"
                 autoComplete="current-password"
-                value={password}
+                value={
+                  password
+                }
                 onChange={(event) =>
                   setPassword(
                     event.target.value
                   )
                 }
                 placeholder="••••••••"
-                disabled={loading}
+                disabled={
+                  loading
+                }
                 required
                 className="w-full rounded-xl border border-zinc-700/80 bg-zinc-800/80 py-3 pl-11 pr-4 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60"
               />
@@ -288,8 +430,10 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2focus-visible:ring-offset-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={
+              loading
+            }
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
           >
 
             {loading ? (

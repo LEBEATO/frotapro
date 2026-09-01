@@ -1,21 +1,35 @@
 'use client'
 
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
+
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+
 import {
   ArrowLeft,
-  Building2,
+  Car,
   CheckCircle2,
   Loader2,
   Mail,
-  Send,
-  UserPlus,
+  Plus,
+  RefreshCw,
+  Search,
+  Unlink,
   UserRound,
+  Users,
+  X,
 } from 'lucide-react'
 
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
+
+// =====================================================
+// TIPOS
+// =====================================================
 
 type ManagerProfile = {
   id: string
@@ -26,54 +40,224 @@ type ManagerProfile = {
   active: boolean
 }
 
-type Branch = {
+type DriverRow = {
+  id: string
+  full_name: string
+  email: string
+  role: string
+  branch_id: string | null
+  active: boolean
+}
+
+type VehicleRow = {
+  id: string
+  model: string
+  plate: string
+  year: string | null
+  status: string | null
+  mileage: number | null
+  driver_id: string | null
+  current_branch_id: string | null
+}
+
+type AssignmentRow = {
+  id: string
+  driver_id: string
+  vehicle_id: string
+  branch_id: string | null
+  assigned_at: string
+  ended_at: string | null
+}
+
+type BranchRow = {
   id: string
   name: string
   code: string
   city: string
+  active: boolean
 }
 
-export default function NewDriverPage() {
-  const router = useRouter()
-  const supabase = useMemo(() => createClient(), [])
+type SelectedDriver = {
+  driver: DriverRow
+  assignment: AssignmentRow | null
+  vehicle: VehicleRow | null
+}
 
-  const [manager, setManager] = useState<ManagerProfile | null>(null)
-  const [branch, setBranch] = useState<Branch | null>(null)
+// =====================================================
+// PAGE
+// =====================================================
 
-  const [fullName, setFullName] = useState('')
-  const [email, setEmail] = useState('')
+export default function ManagerDriversPage() {
+  const supabase = useMemo(
+    () => createClient(),
+    []
+  )
 
-  const [loadingPage, setLoadingPage] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
+  const [manager, setManager] =
+    useState<ManagerProfile | null>(null)
 
-  const [errorMessage, setErrorMessage] = useState('')
-  const [successMessage, setSuccessMessage] = useState('')
+  const [branch, setBranch] =
+    useState<BranchRow | null>(null)
 
-  useEffect(() => {
-    async function loadManagerData() {
-      setLoadingPage(true)
-      setErrorMessage('')
+  const [drivers, setDrivers] =
+    useState<DriverRow[]>([])
 
-      try {
-        // =====================================================
-        // 1. USUÁRIO AUTENTICADO
-        // =====================================================
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser()
+  const [vehicles, setVehicles] =
+    useState<VehicleRow[]>([])
 
-        if (userError || !user) {
-          throw new Error('Usuário não autenticado.')
-        }
+  const [assignments, setAssignments] =
+    useState<AssignmentRow[]>([])
 
-        // =====================================================
-        // 2. PERFIL DO GESTOR
-        // =====================================================
-        const {
-          data: managerProfile,
-          error: profileError,
-        } = await supabase
+  const [search, setSearch] =
+    useState('')
+
+  const [loading, setLoading] =
+    useState(true)
+
+  const [saving, setSaving] =
+    useState(false)
+
+  const [errorMessage, setErrorMessage] =
+    useState('')
+
+  const [successMessage, setSuccessMessage] =
+    useState('')
+
+  const [selectedDriver, setSelectedDriver] =
+    useState<SelectedDriver | null>(null)
+
+  const [selectedVehicleId, setSelectedVehicleId] =
+    useState('')
+
+  const [resendingId, setResendingId] =
+    useState<string | null>(null)
+
+  // =====================================================
+  // CARREGAR DADOS
+  // =====================================================
+
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    setErrorMessage('')
+
+    try {
+      // -------------------------------------------------
+      // USUÁRIO LOGADO
+      // -------------------------------------------------
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
+
+      if (userError || !user) {
+        throw new Error(
+          'Usuário não autenticado.'
+        )
+      }
+
+      // -------------------------------------------------
+      // PERFIL DO GESTOR
+      // -------------------------------------------------
+
+      const {
+        data: managerData,
+        error: managerError,
+      } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          full_name,
+          email,
+          role,
+          branch_id,
+          active
+        `)
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (managerError) {
+        throw managerError
+      }
+
+      if (!managerData) {
+        throw new Error(
+          'Perfil do gestor não encontrado.'
+        )
+      }
+
+      const managerProfile =
+        managerData as ManagerProfile
+
+      if (!managerProfile.active) {
+        throw new Error(
+          'Seu usuário está inativo.'
+        )
+      }
+
+      if (
+        managerProfile.role !==
+        'branch_manager'
+      ) {
+        throw new Error(
+          'Esta página é exclusiva para gestores de base.'
+        )
+      }
+
+      if (!managerProfile.branch_id) {
+        throw new Error(
+          'O gestor não possui base vinculada.'
+        )
+      }
+
+      setManager(managerProfile)
+
+      const branchId =
+        managerProfile.branch_id
+
+      // -------------------------------------------------
+      // BASE
+      // -------------------------------------------------
+
+      const {
+        data: branchData,
+        error: branchError,
+      } = await supabase
+        .from('branches')
+        .select(`
+          id,
+          name,
+          code,
+          city,
+          active
+        `)
+        .eq('id', branchId)
+        .maybeSingle()
+
+      if (branchError) {
+        throw branchError
+      }
+
+      if (!branchData) {
+        throw new Error(
+          'Base do gestor não encontrada.'
+        )
+      }
+
+      setBranch(
+        branchData as BranchRow
+      )
+
+      // -------------------------------------------------
+      // MOTORISTAS + VEÍCULOS + ATRIBUIÇÕES
+      // -------------------------------------------------
+
+      const [
+        driversResponse,
+        vehiclesResponse,
+        assignmentsResponse,
+      ] = await Promise.all([
+        supabase
           .from('profiles')
           .select(`
             id,
@@ -83,507 +267,1152 @@ export default function NewDriverPage() {
             branch_id,
             active
           `)
-          .eq('id', user.id)
-          .maybeSingle()
+          .eq('role', 'driver')
+          .eq('branch_id', branchId)
+          .order('full_name'),
 
-        if (profileError) {
-          throw profileError
-        }
-
-        if (!managerProfile) {
-          throw new Error('Perfil do gestor não encontrado.')
-        }
-
-        if (managerProfile.active === false) {
-          throw new Error('Este usuário está desativado.')
-        }
-
-        if (managerProfile.role !== 'branch_manager') {
-          throw new Error(
-            'Apenas gestores de base podem cadastrar motoristas.'
-          )
-        }
-
-        if (!managerProfile.branch_id) {
-          throw new Error(
-            'O gestor não está vinculado a uma base.'
-          )
-        }
-
-        setManager(managerProfile as ManagerProfile)
-
-        // =====================================================
-        // 3. CARREGAR BASE DO GESTOR
-        // =====================================================
-        const {
-          data: branchData,
-          error: branchError,
-        } = await supabase
-          .from('branches')
+        supabase
+          .from('vehicles')
           .select(`
             id,
-            name,
-            code,
-            city
+            model,
+            plate,
+            year,
+            status,
+            mileage,
+            driver_id,
+            current_branch_id
           `)
-          .eq('id', managerProfile.branch_id)
-          .maybeSingle()
+          .eq(
+            'current_branch_id',
+            branchId
+          )
+          .order('plate'),
 
-        if (branchError) {
-          throw branchError
-        }
+        supabase
+          .from(
+            'driver_vehicle_assignments'
+          )
+          .select(`
+            id,
+            driver_id,
+            vehicle_id,
+            branch_id,
+            assigned_at,
+            ended_at
+          `)
+          .eq('branch_id', branchId)
+          .is('ended_at', null),
+      ])
 
-        if (!branchData) {
-          throw new Error('Base do gestor não encontrada.')
-        }
-
-        setBranch(branchData as Branch)
-      } catch (error) {
-        console.error(
-          'Erro ao carregar dados do gestor:',
-          error
-        )
-
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : 'Não foi possível carregar os dados do gestor.'
-        )
-      } finally {
-        setLoadingPage(false)
-      }
-    }
-
-    void loadManagerData()
-  }, [supabase])
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
-    setErrorMessage('')
-    setSuccessMessage('')
-
-    const cleanName = fullName.trim()
-    const cleanEmail = email.trim().toLowerCase()
-
-    if (!cleanName) {
-      setErrorMessage('Informe o nome completo do motorista.')
-      return
-    }
-
-    if (cleanName.length < 3) {
-      setErrorMessage(
-        'O nome do motorista deve ter pelo menos 3 caracteres.'
-      )
-      return
-    }
-
-    if (!cleanEmail) {
-      setErrorMessage('Informe o e-mail do motorista.')
-      return
-    }
-
-    if (!isValidEmail(cleanEmail)) {
-      setErrorMessage('Informe um e-mail válido.')
-      return
-    }
-
-    if (!manager?.branch_id) {
-      setErrorMessage(
-        'O gestor não possui uma base vinculada.'
-      )
-      return
-    }
-
-    setSubmitting(true)
-
-    try {
-      // =====================================================
-      // 4. CRIAR MOTORISTA / ENVIAR CONVITE
-      // =====================================================
-      const response = await fetch('/api/manager/drivers', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          fullName: cleanName,
-          email: cleanEmail,
-        }),
-      })
-
-      let data: {
-        message?: string
-        error?: string
-      } = {}
-
-      try {
-        data = await response.json()
-      } catch {
-        // resposta sem JSON
+      if (driversResponse.error) {
+        throw driversResponse.error
       }
 
-      if (!response.ok) {
-        throw new Error(
-          data.error ??
-            'Não foi possível cadastrar o motorista.'
-        )
+      if (vehiclesResponse.error) {
+        throw vehiclesResponse.error
       }
 
-      setSuccessMessage(
-        data.message ??
-          'Motorista cadastrado e convite enviado com sucesso.'
+      if (assignmentsResponse.error) {
+        throw assignmentsResponse.error
+      }
+
+      setDrivers(
+        (
+          driversResponse.data ?? []
+        ) as DriverRow[]
       )
 
-      setFullName('')
-      setEmail('')
+      setVehicles(
+        (
+          vehiclesResponse.data ?? []
+        ) as VehicleRow[]
+      )
 
-      // Aguarda um pouco para o gestor visualizar a mensagem
-      setTimeout(() => {
-        router.push('/manager/drivers')
-        router.refresh()
-      }, 1800)
+      setAssignments(
+        (
+          assignmentsResponse.data ?? []
+        ) as AssignmentRow[]
+      )
     } catch (error) {
       console.error(
-        'Erro ao cadastrar motorista:',
+        'Erro ao carregar motoristas:',
         error
       )
 
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : 'Não foi possível cadastrar o motorista.'
+          : 'Não foi possível carregar os motoristas.'
       )
     } finally {
-      setSubmitting(false)
+      setLoading(false)
+    }
+  }, [supabase])
+
+  useEffect(() => {
+    void loadData()
+  }, [loadData])
+
+  // =====================================================
+  // MAPAS
+  // =====================================================
+
+  const assignmentByDriver =
+    useMemo(() => {
+      return new Map(
+        assignments.map(
+          (assignment) => [
+            assignment.driver_id,
+            assignment,
+          ]
+        )
+      )
+    }, [assignments])
+
+  const assignmentByVehicle =
+    useMemo(() => {
+      return new Map(
+        assignments.map(
+          (assignment) => [
+            assignment.vehicle_id,
+            assignment,
+          ]
+        )
+      )
+    }, [assignments])
+
+  const vehicleMap =
+    useMemo(() => {
+      return new Map(
+        vehicles.map((vehicle) => [
+          vehicle.id,
+          vehicle,
+        ])
+      )
+    }, [vehicles])
+
+  // =====================================================
+  // FILTRO
+  // =====================================================
+
+  const filteredDrivers =
+    useMemo(() => {
+      const query =
+        search
+          .trim()
+          .toLowerCase()
+
+      if (!query) {
+        return drivers
+      }
+
+      return drivers.filter(
+        (driver) => {
+          const assignment =
+            assignmentByDriver.get(
+              driver.id
+            )
+
+          const vehicle =
+            assignment
+              ? vehicleMap.get(
+                  assignment.vehicle_id
+                )
+              : null
+
+          const values = [
+            driver.full_name,
+            driver.email,
+            vehicle?.model,
+            vehicle?.plate,
+            vehicle?.status,
+          ]
+
+          return values
+            .filter(Boolean)
+            .some((value) =>
+              String(value)
+                .toLowerCase()
+                .includes(query)
+            )
+        }
+      )
+    }, [
+      drivers,
+      search,
+      assignmentByDriver,
+      vehicleMap,
+    ])
+
+  // =====================================================
+  // VEÍCULOS DISPONÍVEIS
+  // =====================================================
+
+  const availableVehicles =
+    useMemo(() => {
+      if (!selectedDriver) {
+        return []
+      }
+
+      return vehicles.filter(
+        (vehicle) => {
+          const activeAssignment =
+            assignmentByVehicle.get(
+              vehicle.id
+            )
+
+          const belongsToSelectedDriver =
+            activeAssignment?.driver_id ===
+            selectedDriver.driver.id
+
+          const isFree =
+            !activeAssignment
+
+          const status =
+            vehicle.status ?? 'Ativo'
+
+          return (
+            status === 'Ativo' &&
+            (
+              isFree ||
+              belongsToSelectedDriver
+            )
+          )
+        }
+      )
+    }, [
+      vehicles,
+      assignmentByVehicle,
+      selectedDriver,
+    ])
+
+  // =====================================================
+  // ABRIR MODAL
+  // =====================================================
+
+  function openAssignmentModal(
+    driver: DriverRow
+  ) {
+    const assignment =
+      assignmentByDriver.get(
+        driver.id
+      ) ?? null
+
+    const vehicle =
+      assignment
+        ? vehicleMap.get(
+            assignment.vehicle_id
+          ) ?? null
+        : null
+
+    setSelectedDriver({
+      driver,
+      assignment,
+      vehicle,
+    })
+
+    setSelectedVehicleId(
+      vehicle?.id ?? ''
+    )
+
+    setErrorMessage('')
+    setSuccessMessage('')
+  }
+
+  function closeModal() {
+    if (saving) {
+      return
+    }
+
+    setSelectedDriver(null)
+    setSelectedVehicleId('')
+  }
+
+  // =====================================================
+  // ATRIBUIR / TROCAR VEÍCULO
+  // =====================================================
+
+  async function handleAssignVehicle() {
+    if (
+      !selectedDriver ||
+      !manager?.branch_id ||
+      !selectedVehicleId
+    ) {
+      setErrorMessage(
+        'Selecione um veículo.'
+      )
+
+      return
+    }
+
+    const driver =
+      selectedDriver.driver
+
+    const oldAssignment =
+      selectedDriver.assignment
+
+    const oldVehicle =
+      selectedDriver.vehicle
+
+    if (
+      oldVehicle?.id ===
+      selectedVehicleId
+    ) {
+      setErrorMessage(
+        'Este veículo já está atribuído ao motorista.'
+      )
+
+      return
+    }
+
+    const newVehicle =
+      vehicles.find(
+        (vehicle) =>
+          vehicle.id ===
+          selectedVehicleId
+      )
+
+    if (!newVehicle) {
+      setErrorMessage(
+        'Veículo não encontrado.'
+      )
+
+      return
+    }
+
+    if (
+      newVehicle.current_branch_id !==
+      manager.branch_id
+    ) {
+      setErrorMessage(
+        'Este veículo não pertence à sua base.'
+      )
+
+      return
+    }
+
+    const vehicleAssignment =
+      assignmentByVehicle.get(
+        newVehicle.id
+      )
+
+    if (
+      vehicleAssignment &&
+      vehicleAssignment.driver_id !==
+        driver.id
+    ) {
+      setErrorMessage(
+        'Este veículo já está atribuído a outro motorista.'
+      )
+
+      return
+    }
+
+    setSaving(true)
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    try {
+      const now =
+        new Date().toISOString()
+
+      // -----------------------------------------------
+      // ENCERRAR ATRIBUIÇÃO ANTERIOR
+      // -----------------------------------------------
+
+      if (oldAssignment) {
+        const {
+          error:
+            closeAssignmentError,
+        } = await supabase
+          .from(
+            'driver_vehicle_assignments'
+          )
+          .update({
+            ended_at: now,
+          })
+          .eq(
+            'id',
+            oldAssignment.id
+          )
+
+        if (
+          closeAssignmentError
+        ) {
+          throw closeAssignmentError
+        }
+      }
+
+      // -----------------------------------------------
+      // DESVINCULAR VEÍCULO ANTIGO
+      // -----------------------------------------------
+
+      if (
+        oldVehicle &&
+        oldVehicle.id !==
+          newVehicle.id
+      ) {
+        const {
+          error:
+            oldVehicleError,
+        } = await supabase
+          .from('vehicles')
+          .update({
+            driver_id: null,
+            updated_at: now,
+          })
+          .eq('id', oldVehicle.id)
+
+        if (oldVehicleError) {
+          throw oldVehicleError
+        }
+      }
+
+      // -----------------------------------------------
+      // CRIAR NOVA ATRIBUIÇÃO
+      // -----------------------------------------------
+
+      const {
+        error: assignmentError,
+      } = await supabase
+        .from(
+          'driver_vehicle_assignments'
+        )
+        .insert({
+          id: crypto.randomUUID(),
+          driver_id: driver.id,
+          vehicle_id: newVehicle.id,
+          branch_id:
+            manager.branch_id,
+          assigned_at: now,
+          ended_at: null,
+        })
+
+      if (assignmentError) {
+        throw assignmentError
+      }
+
+      // -----------------------------------------------
+      // ATUALIZAR VEÍCULO
+      // -----------------------------------------------
+
+      const {
+        error: vehicleError,
+      } = await supabase
+        .from('vehicles')
+        .update({
+          driver_id: driver.id,
+          updated_at: now,
+        })
+        .eq('id', newVehicle.id)
+
+      if (vehicleError) {
+        throw vehicleError
+      }
+
+      setSuccessMessage(
+        oldAssignment
+          ? `Veículo do motorista ${driver.full_name} trocado com sucesso.`
+          : `Veículo atribuído a ${driver.full_name} com sucesso.`
+      )
+
+      setSelectedDriver(null)
+      setSelectedVehicleId('')
+
+      await loadData()
+    } catch (error) {
+      console.error(
+        'Erro ao atribuir veículo:',
+        error
+      )
+
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível atribuir o veículo.'
+      )
+    } finally {
+      setSaving(false)
     }
   }
 
-  if (loadingPage) {
-    return (
-      <AppShell>
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+  // =====================================================
+  // REMOVER ATRIBUIÇÃO
+  // =====================================================
 
-            <p className="text-sm text-zinc-500">
-              Carregando dados da base...
-            </p>
-          </div>
-        </div>
-      </AppShell>
-    )
+  async function handleRemoveAssignment() {
+    if (
+      !selectedDriver?.assignment
+    ) {
+      return
+    }
+
+    const driver =
+      selectedDriver.driver
+
+    const assignment =
+      selectedDriver.assignment
+
+    const vehicle =
+      selectedDriver.vehicle
+
+    const confirmed =
+      window.confirm(
+        `Deseja remover o veículo de ${driver.full_name}?`
+      )
+
+    if (!confirmed) {
+      return
+    }
+
+    setSaving(true)
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    try {
+      const now =
+        new Date().toISOString()
+
+      // ENCERRA HISTÓRICO
+
+      const {
+        error: assignmentError,
+      } = await supabase
+        .from(
+          'driver_vehicle_assignments'
+        )
+        .update({
+          ended_at: now,
+        })
+        .eq('id', assignment.id)
+
+      if (assignmentError) {
+        throw assignmentError
+      }
+
+      // REMOVE MOTORISTA DO VEÍCULO
+
+      if (vehicle) {
+        const {
+          error: vehicleError,
+        } = await supabase
+          .from('vehicles')
+          .update({
+            driver_id: null,
+            updated_at: now,
+          })
+          .eq('id', vehicle.id)
+
+        if (vehicleError) {
+          throw vehicleError
+        }
+      }
+
+      setSuccessMessage(
+        `Veículo removido de ${driver.full_name}.`
+      )
+
+      setSelectedDriver(null)
+      setSelectedVehicleId('')
+
+      await loadData()
+    } catch (error) {
+      console.error(
+        'Erro ao remover atribuição:',
+        error
+      )
+
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível remover a atribuição.'
+      )
+    } finally {
+      setSaving(false)
+    }
   }
+
+  // =====================================================
+  // REENVIAR CONVITE
+  // =====================================================
+
+  async function handleResendInvite(
+    driver: DriverRow
+  ) {
+    setResendingId(driver.id)
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    try {
+      const response = await fetch(
+        `/api/manager/drivers/${driver.id}/resend-invite`,
+        {
+          method: 'POST',
+        }
+      )
+
+      const data =
+        (await response.json()) as {
+          message?: string
+          error?: string
+        }
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ??
+            'Não foi possível reenviar o convite.'
+        )
+      }
+
+      setSuccessMessage(
+        data.message ??
+          `Convite reenviado para ${driver.email}.`
+      )
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível reenviar o convite.'
+      )
+    } finally {
+      setResendingId(null)
+    }
+  }
+
+  // =====================================================
+  // INDICADORES
+  // =====================================================
+
+  const activeDrivers =
+    drivers.filter(
+      (driver) => driver.active
+    ).length
+
+  const assignedDrivers =
+    drivers.filter(
+      (driver) =>
+        assignmentByDriver.has(
+          driver.id
+        )
+    ).length
+
+  // =====================================================
+  // UI
+  // =====================================================
 
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-4xl space-y-6 sm:space-y-8">
-        {/* =====================================================
-            CABEÇALHO
-        ===================================================== */}
-        <section className="flex items-start gap-3">
-          <Link
-            href="/manager"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 transition hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
-            aria-label="Voltar para motoristas"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
+      <div className="space-y-6 sm:space-y-8">
 
-          <div>
-            <p className="text-sm font-medium text-blue-400">
-              Gestão de motoristas
-            </p>
+        {/* HEADER */}
 
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">
-              Novo motorista
-            </h1>
+        <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
 
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-              Cadastre um novo motorista na sua unidade.
-              O motorista receberá um convite por e-mail para criar
-              a própria senha e acessar o FrotaPro.
-            </p>
-          </div>
-        </section>
-
-        {/* =====================================================
-            ERRO DE CARREGAMENTO
-        ===================================================== */}
-        {errorMessage && !manager && (
-          <section className="rounded-2xl border border-red-500/20 bg-red-500/10 p-5">
-            <p className="text-sm font-medium text-red-400">
-              {errorMessage}
-            </p>
+          <div className="flex items-start gap-3">
 
             <Link
-              href="/manager/drivers"
-              className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800"
+              href="/manager"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 transition hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
             >
-              Voltar
+              <ArrowLeft className="h-4 w-4" />
             </Link>
-          </section>
+
+            <div>
+              <p className="text-sm font-semibold text-blue-400">
+                Gestão da unidade
+              </p>
+
+              <h1 className="mt-1 text-2xl font-bold text-white sm:text-3xl">
+                Motoristas
+              </h1>
+
+              <p className="mt-2 text-sm text-zinc-400">
+                {branch
+                  ? `${branch.name} • ${branch.city} • ${branch.code}`
+                  : 'Motoristas da sua base'}
+              </p>
+            </div>
+
+          </div>
+
+          <Link
+            href="/manager/drivers/new"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
+          >
+            <Plus className="h-4 w-4" />
+            Novo motorista
+          </Link>
+
+        </section>
+
+        {/* INDICADORES */}
+
+        <section className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+
+          <StatCard
+            label="Motoristas"
+            value={drivers.length}
+          />
+
+          <StatCard
+            label="Ativos"
+            value={activeDrivers}
+          />
+
+          <StatCard
+            label="Com veículo"
+            value={assignedDrivers}
+          />
+
+        </section>
+
+        {/* BUSCA */}
+
+        <section className="flex flex-col gap-3 sm:flex-row">
+
+          <div className="relative flex-1">
+
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+
+            <input
+              value={search}
+              onChange={(event) =>
+                setSearch(
+                  event.target.value
+                )
+              }
+              placeholder="Buscar motorista, e-mail, veículo ou placa..."
+              className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900/70 pl-10 pr-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+            />
+
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              void loadData()
+            }
+            disabled={loading}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-50"
+          >
+            <RefreshCw
+              className={[
+                'h-4 w-4',
+                loading
+                  ? 'animate-spin'
+                  : '',
+              ].join(' ')}
+            />
+
+            Atualizar
+          </button>
+
+        </section>
+
+        {/* MENSAGENS */}
+
+        {errorMessage && (
+          <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">
+            {errorMessage}
+          </div>
         )}
 
-        {manager && branch && (
-          <>
-            {/* =====================================================
-                BASE DO MOTORISTA
-            ===================================================== */}
-            <section className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5 sm:p-6">
-              <div className="flex items-start gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-400">
-                  <Building2 className="h-5 w-5" />
-                </div>
+        {successMessage && (
+          <div className="flex items-start gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-400">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+            {successMessage}
+          </div>
+        )}
 
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-blue-400">
-                    Base do motorista
-                  </p>
+        {/* LISTAGEM */}
 
-                  <h2 className="mt-1 text-lg font-bold text-white">
-                    {branch.name}
-                  </h2>
+        {loading ? (
 
-                  <p className="mt-1 text-sm text-zinc-400">
-                    {branch.city} • Código {branch.code}
-                  </p>
+          <div className="flex min-h-64 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/60">
 
-                  <p className="mt-3 text-xs leading-5 text-zinc-500">
-                    O novo motorista será automaticamente
-                    vinculado a esta unidade.
-                  </p>
-                </div>
-              </div>
-            </section>
+            <div className="text-center">
 
-            {/* =====================================================
-                MENSAGEM DE SUCESSO
-            ===================================================== */}
-            {successMessage && (
-              <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+              <Loader2 className="mx-auto h-7 w-7 animate-spin text-blue-400" />
 
-                  <div>
-                    <p className="text-sm font-semibold text-emerald-300">
-                      Cadastro realizado
-                    </p>
+              <p className="mt-3 text-sm text-zinc-500">
+                Carregando motoristas...
+              </p>
 
-                    <p className="mt-1 text-sm text-emerald-400">
-                      {successMessage}
-                    </p>
-                  </div>
-                </div>
-              </section>
-            )}
+            </div>
 
-            {/* =====================================================
-                MENSAGEM DE ERRO
-            ===================================================== */}
-            {errorMessage && (
-              <section className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
-                <p className="text-sm font-medium text-red-400">
-                  {errorMessage}
-                </p>
-              </section>
-            )}
+          </div>
 
-            {/* =====================================================
-                FORMULÁRIO
-            ===================================================== */}
-            <form
-              onSubmit={handleSubmit}
-              className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/60"
-            >
-              <div className="border-b border-zinc-800 p-5 sm:p-6">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
-                    <UserPlus className="h-5 w-5" />
-                  </div>
+        ) : filteredDrivers.length === 0 ? (
 
-                  <div>
-                    <h2 className="font-bold text-white">
-                      Dados do motorista
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-10 text-center">
+
+            <Users className="mx-auto h-10 w-10 text-zinc-700" />
+
+            <p className="mt-4 font-semibold text-zinc-300">
+              Nenhum motorista encontrado
+            </p>
+
+            <p className="mt-1 text-sm text-zinc-500">
+              Cadastre um motorista ou altere a busca.
+            </p>
+
+          </div>
+
+        ) : (
+
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+
+            {filteredDrivers.map(
+              (driver) => {
+
+                const assignment =
+                  assignmentByDriver.get(
+                    driver.id
+                  )
+
+                const vehicle =
+                  assignment
+                    ? vehicleMap.get(
+                        assignment.vehicle_id
+                      )
+                    : null
+
+                return (
+                  <article
+                    key={driver.id}
+                    className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5"
+                  >
+
+                    <div className="flex items-start justify-between gap-4">
+
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
+                        <UserRound className="h-5 w-5" />
+                      </div>
+
+                      <span
+                        className={[
+                          'rounded-full border px-2.5 py-1 text-xs font-semibold',
+                          driver.active
+                            ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
+                            : 'border-zinc-700 bg-zinc-800 text-zinc-500',
+                        ].join(' ')}
+                      >
+                        {driver.active
+                          ? 'Ativo'
+                          : 'Inativo'}
+                      </span>
+
+                    </div>
+
+                    <h2 className="mt-4 text-lg font-bold text-white">
+                      {driver.full_name}
                     </h2>
 
-                    <p className="mt-0.5 text-xs text-zinc-500">
-                      Informe os dados necessários para enviar o convite.
-                    </p>
-                  </div>
-                </div>
+                    <div className="mt-2 flex items-center gap-2 text-sm text-zinc-500">
+                      <Mail className="h-4 w-4 shrink-0" />
+
+                      <span className="truncate">
+                        {driver.email}
+                      </span>
+                    </div>
+
+                    <div className="mt-5 border-t border-zinc-800 pt-4">
+
+                      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-600">
+                        Veículo atual
+                      </p>
+
+                      {vehicle ? (
+
+                        <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+
+                          <div className="flex items-center gap-3">
+
+                            <Car className="h-5 w-5 text-blue-400" />
+
+                            <div>
+                              <p className="font-semibold text-white">
+                                {vehicle.model}
+                              </p>
+
+                              <p className="mt-1 font-mono text-sm font-semibold text-blue-400">
+                                {vehicle.plate}
+                              </p>
+                            </div>
+
+                          </div>
+
+                          <p className="mt-3 text-xs text-zinc-500">
+                            {(
+                              vehicle.mileage ?? 0
+                            ).toLocaleString(
+                              'pt-BR'
+                            )}{' '}
+                            km
+                          </p>
+
+                        </div>
+
+                      ) : (
+
+                        <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-400">
+                          Nenhum veículo atribuído.
+                        </div>
+
+                      )}
+
+                    </div>
+
+                    <div className="mt-5 space-y-2 border-t border-zinc-800 pt-4">
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openAssignmentModal(
+                            driver
+                          )
+                        }
+                        disabled={!driver.active}
+                        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <Car className="h-4 w-4" />
+
+                        {vehicle
+                          ? 'Trocar veículo'
+                          : 'Atribuir veículo'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void handleResendInvite(
+                            driver
+                          )
+                        }
+                        disabled={
+                          resendingId ===
+                          driver.id
+                        }
+                        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-zinc-800 px-4 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-50"
+                      >
+                        {resendingId ===
+                        driver.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Mail className="h-4 w-4" />
+                        )}
+
+                        Reenviar convite
+                      </button>
+
+                    </div>
+
+                  </article>
+                )
+              }
+            )}
+
+          </section>
+
+        )}
+
+      </div>
+
+      {/* ===================================================
+          MODAL DE ATRIBUIÇÃO
+      =================================================== */}
+
+      {selectedDriver && (
+
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+
+          <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl">
+
+            <div className="flex items-start justify-between gap-4 border-b border-zinc-800 p-5">
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-blue-400">
+                  Veículo do motorista
+                </p>
+
+                <h2 className="mt-1 text-xl font-bold text-white">
+                  {selectedDriver.driver.full_name}
+                </h2>
+
+                <p className="mt-1 text-sm text-zinc-500">
+                  {selectedDriver.driver.email}
+                </p>
               </div>
 
-              <div className="space-y-5 p-5 sm:p-6">
-                {/* NOME */}
-                <div>
-                  <label
-                    htmlFor="fullName"
-                    className="mb-2 block text-sm font-semibold text-zinc-300"
-                  >
-                    Nome completo
-                  </label>
+              <button
+                type="button"
+                onClick={closeModal}
+                disabled={saving}
+                className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
 
-                  <div className="relative">
-                    <UserRound className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            </div>
 
-                    <input
-                      id="fullName"
-                      name="fullName"
-                      type="text"
-                      value={fullName}
-                      onChange={(event) =>
-                        setFullName(event.target.value)
-                      }
-                      placeholder="Ex: João da Silva"
-                      autoComplete="name"
-                      disabled={submitting}
-                      className="min-h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950/60 py-3 pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                    />
-                  </div>
+            <div className="space-y-5 p-5">
+
+              {selectedDriver.vehicle && (
+
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
+
+                  <p className="text-xs font-semibold uppercase text-zinc-600">
+                    Veículo atual
+                  </p>
+
+                  <p className="mt-2 font-semibold text-white">
+                    {selectedDriver.vehicle.model}
+                  </p>
+
+                  <p className="mt-1 font-mono text-sm text-blue-400">
+                    {selectedDriver.vehicle.plate}
+                  </p>
+
                 </div>
 
-                {/* EMAIL */}
-                <div>
-                  <label
-                    htmlFor="email"
-                    className="mb-2 block text-sm font-semibold text-zinc-300"
-                  >
-                    E-mail
-                  </label>
+              )}
 
-                  <div className="relative">
-                    <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-zinc-300">
+                  {selectedDriver.vehicle
+                    ? 'Novo veículo'
+                    : 'Selecionar veículo'}
+                </label>
 
-                    <input
-                      id="email"
-                      name="email"
-                      type="email"
-                      value={email}
-                      onChange={(event) =>
-                        setEmail(event.target.value)
-                      }
-                      placeholder="motorista@email.com"
-                      autoComplete="email"
-                      disabled={submitting}
-                      className="min-h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950/60 py-3 pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                    />
-                  </div>
-
-                  <p className="mt-2 text-xs leading-5 text-zinc-600">
-                    O convite para criação da senha será enviado
-                    para este endereço.
-                  </p>
-                </div>
-
-                {/* GESTOR */}
-                <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-600">
-                    Responsável pelo cadastro
-                  </p>
-
-                  <p className="mt-2 text-sm font-medium text-zinc-300">
-                    {manager.full_name}
-                  </p>
-
-                  <p className="mt-1 text-xs text-zinc-500">
-                    {manager.email}
-                  </p>
-                </div>
-              </div>
-
-              {/* =====================================================
-                  BOTÕES
-              ===================================================== */}
-              <div className="flex flex-col-reverse gap-3 border-t border-zinc-800 bg-zinc-950/30 p-5 sm:flex-row sm:justify-end sm:p-6">
-                <Link
-                  href="/manager/drivers"
-                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
+                <select
+                  value={selectedVehicleId}
+                  onChange={(event) =>
+                    setSelectedVehicleId(
+                      event.target.value
+                    )
+                  }
+                  disabled={saving}
+                  className="min-h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                 >
-                  Cancelar
-                </Link>
+                  <option value="">
+                    Selecione um veículo
+                  </option>
+
+                  {availableVehicles.map(
+                    (vehicle) => (
+                      <option
+                        key={vehicle.id}
+                        value={vehicle.id}
+                      >
+                        {vehicle.plate} •{' '}
+                        {vehicle.model}
+                      </option>
+                    )
+                  )}
+                </select>
+
+                {availableVehicles.length ===
+                  0 && (
+                  <p className="mt-2 text-xs text-amber-400">
+                    Não há veículos ativos e disponíveis nesta base.
+                  </p>
+                )}
+              </div>
+
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-zinc-800 p-5 sm:flex-row sm:justify-between">
+
+              <div>
+
+                {selectedDriver.assignment && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void handleRemoveAssignment()
+                    }
+                    disabled={saving}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-4 text-sm font-semibold text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
+                  >
+                    <Unlink className="h-4 w-4" />
+                    Remover veículo
+                  </button>
+                )}
+
+              </div>
+
+              <div className="flex flex-col-reverse gap-2 sm:flex-row">
 
                 <button
-                  type="submit"
-                  disabled={submitting || Boolean(successMessage)}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  type="button"
+                  onClick={closeModal}
+                  disabled={saving}
+                  className="min-h-11 rounded-xl border border-zinc-800 px-4 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800"
                 >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Enviando convite...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4" />
-                      Cadastrar e enviar convite
-                    </>
-                  )}
+                  Cancelar
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void handleAssignVehicle()
+                  }
+                  disabled={
+                    saving ||
+                    !selectedVehicleId
+                  }
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Car className="h-4 w-4" />
+                  )}
+
+                  {saving
+                    ? 'Salvando...'
+                    : selectedDriver.assignment
+                      ? 'Trocar veículo'
+                      : 'Atribuir veículo'}
+                </button>
+
               </div>
-            </form>
 
-            {/* =====================================================
-                EXPLICAÇÃO DO FLUXO
-            ===================================================== */}
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 sm:p-6">
-              <h2 className="text-sm font-bold text-zinc-300">
-                O que acontece depois?
-              </h2>
+            </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <FlowCard
-                  number="1"
-                  title="Cadastro"
-                  description="O motorista é vinculado automaticamente à sua base."
-                />
+          </div>
 
-                <FlowCard
-                  number="2"
-                  title="Convite"
-                  description="O FrotaPro envia um convite para o e-mail informado."
-                />
+        </div>
 
-                <FlowCard
-                  number="3"
-                  title="Acesso"
-                  description="O motorista cria sua senha e entra no painel dele."
-                />
-              </div>
-            </section>
-          </>
-        )}
-      </div>
+      )}
+
     </AppShell>
   )
 }
 
-function FlowCard({
-  number,
-  title,
-  description,
+// =====================================================
+// STAT
+// =====================================================
+
+function StatCard({
+  label,
+  value,
 }: {
-  number: string
-  title: string
-  description: string
+  label: string
+  value: number
 }) {
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-xs font-bold text-blue-400">
-        {number}
-      </div>
+    <article className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
 
-      <p className="mt-3 text-sm font-semibold text-zinc-300">
-        {title}
+      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+        {label}
       </p>
 
-      <p className="mt-1 text-xs leading-5 text-zinc-500">
-        {description}
+      <p className="mt-2 text-3xl font-bold text-white">
+        {value}
       </p>
-    </div>
+
+    </article>
   )
-}
-
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }

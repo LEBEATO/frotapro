@@ -17,7 +17,6 @@ import {
   Gauge,
   Loader2,
   MapPin,
-  Plus,
   Power,
   PowerOff,
   RefreshCw,
@@ -58,13 +57,18 @@ type BranchRow = {
   code: string
   city: string
   active: boolean
-  states: BranchState | BranchState[] | null
+  states:
+    | BranchState
+    | BranchState[]
+    | null
 }
 
 function getState(
   branch: BranchRow | null
 ): BranchState | null {
-  if (!branch?.states) return null
+  if (!branch?.states) {
+    return null
+  }
 
   if (Array.isArray(branch.states)) {
     return branch.states[0] ?? null
@@ -169,15 +173,24 @@ export default function AdminVehiclesPage() {
       }
 
       setVehicles(
-        (vehiclesResponse.data as VehicleRow[] | null) ?? []
+        (
+          vehiclesResponse.data ??
+          []
+        ) as VehicleRow[]
       )
 
       setProfiles(
-        (profilesResponse.data as ProfileRow[] | null) ?? []
+        (
+          profilesResponse.data ??
+          []
+        ) as ProfileRow[]
       )
 
       setBranches(
-        (branchesResponse.data as BranchRow[] | null) ?? []
+        (
+          branchesResponse.data ??
+          []
+        ) as BranchRow[]
       )
     } catch (error) {
       console.error(
@@ -231,7 +244,9 @@ export default function AdminVehiclesPage() {
     const currentStatus =
       vehicle.status ?? 'Ativo'
 
-    if (currentStatus === 'Manutenção') {
+    if (
+      currentStatus === 'Manutenção'
+    ) {
       setErrorMessage(
         'Veículos em manutenção devem ser liberados pelo módulo de manutenção.'
       )
@@ -253,7 +268,8 @@ export default function AdminVehiclesPage() {
         .from('vehicles')
         .update({
           status: newStatus,
-          updated_at: new Date().toISOString(),
+          updated_at:
+            new Date().toISOString(),
         })
         .eq('id', vehicle.id)
 
@@ -295,61 +311,70 @@ export default function AdminVehiclesPage() {
   // FILTRO
   // =====================================================
 
-  const filteredVehicles = useMemo(() => {
-    const query =
-      search.trim().toLowerCase()
+  const filteredVehicles =
+    useMemo(() => {
+      const query =
+        search
+          .trim()
+          .toLowerCase()
 
-    if (!query) {
-      return vehicles
-    }
+      if (!query) {
+        return vehicles
+      }
 
-    return vehicles.filter((vehicle) => {
-      const driver =
-        vehicle.driver_id
-          ? profileMap.get(vehicle.driver_id)
-          : null
+      return vehicles.filter(
+        (vehicle) => {
+          const driver =
+            vehicle.driver_id
+              ? profileMap.get(
+                  vehicle.driver_id
+                )
+              : null
 
-      const branch =
-        vehicle.current_branch_id
-          ? branchMap.get(
-              vehicle.current_branch_id
+          const branch =
+            vehicle.current_branch_id
+              ? branchMap.get(
+                  vehicle.current_branch_id
+                )
+              : null
+
+          const state =
+            getState(
+              branch ?? null
             )
-          : null
 
-      const state =
-        getState(branch ?? null)
+          const values = [
+            vehicle.plate,
+            vehicle.model,
+            vehicle.year,
+            vehicle.status ?? 'Ativo',
 
-      const values = [
-        vehicle.plate,
-        vehicle.model,
-        vehicle.year,
-        vehicle.status ?? 'Ativo',
+            driver?.full_name,
+            driver?.email,
 
-        driver?.full_name,
-        driver?.email,
+            branch?.name,
+            branch?.code,
+            branch?.city,
 
-        branch?.name,
-        branch?.code,
-        branch?.city,
+            state?.name,
+            state?.uf,
+          ]
 
-        state?.name,
-        state?.uf,
-      ]
-
-      return values
-        .filter(Boolean)
-        .some((value) =>
-          String(value)
-            .toLowerCase()
-            .includes(query)
-        )
-    })
-  }, [
-    vehicles,
-    search,
-    profileMap,
-    branchMap,
-  ])
+          return values
+            .filter(Boolean)
+            .some((value) =>
+              String(value)
+                .toLowerCase()
+                .includes(query)
+            )
+        }
+      )
+    }, [
+      vehicles,
+      search,
+      profileMap,
+      branchMap,
+    ])
 
   // =====================================================
   // INDICADORES
@@ -371,7 +396,14 @@ export default function AdminVehiclesPage() {
   const maintenanceVehicles =
     vehicles.filter(
       (vehicle) =>
-        vehicle.status === 'Manutenção'
+        vehicle.status ===
+        'Manutenção'
+    ).length
+
+  const vehiclesWithoutBranch =
+    vehicles.filter(
+      (vehicle) =>
+        !vehicle.current_branch_id
     ).length
 
   // =====================================================
@@ -382,7 +414,9 @@ export default function AdminVehiclesPage() {
     <AppShell>
       <div className="space-y-6 sm:space-y-8">
 
-        {/* HEADER */}
+        {/* =================================================
+            CABEÇALHO
+        ================================================= */}
 
         <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
 
@@ -397,34 +431,82 @@ export default function AdminVehiclesPage() {
             </Link>
 
             <div>
+
               <p className="text-sm font-medium text-blue-400">
-                Gestão da frota
+                Administração global
               </p>
 
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">
                 Veículos
               </h1>
 
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-                Visão global dos veículos,
-                motoristas, bases e situação
-                operacional da frota.
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
+                Acompanhe todos os veículos cadastrados
+                pelas bases, seus motoristas, localização
+                e situação operacional.
               </p>
+
             </div>
 
           </div>
 
-          <Link
-            href="/admin/vehicles/new"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
+          <button
+            type="button"
+            onClick={() =>
+              void loadData()
+            }
+            disabled={loading}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Plus className="h-4 w-4" />
-            Novo veículo
-          </Link>
+            <RefreshCw
+              className={[
+                'h-4 w-4',
+                loading
+                  ? 'animate-spin'
+                  : '',
+              ].join(' ')}
+            />
+
+            Atualizar
+          </button>
 
         </section>
 
-        {/* INDICADORES */}
+        {/* =================================================
+            INFORMAÇÃO DA REGRA
+        ================================================= */}
+
+        <section className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 sm:p-5">
+
+          <div className="flex items-start gap-3">
+
+            <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-2.5 text-blue-400">
+              <Building2 className="h-5 w-5" />
+            </div>
+
+            <div>
+
+              <p className="text-sm font-semibold text-blue-300">
+                Gestão nacional da frota
+              </p>
+
+              <p className="mt-1 max-w-3xl text-xs leading-5 text-zinc-500">
+                O cadastro de veículos é realizado pelo
+                gestor responsável por cada base. O Admin
+                acompanha toda a frota nacional e pode
+                controlar a situação operacional dos
+                veículos.
+              </p>
+
+            </div>
+
+          </div>
+
+        </section>
+
+        {/* =================================================
+            INDICADORES
+        ================================================= */}
 
         <section className="grid grid-cols-2 gap-4 xl:grid-cols-4">
 
@@ -454,7 +536,42 @@ export default function AdminVehiclesPage() {
 
         </section>
 
-        {/* LEGENDA */}
+        {/* =================================================
+            ALERTA DE VEÍCULOS SEM BASE
+        ================================================= */}
+
+        {vehiclesWithoutBranch > 0 && (
+          <section className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+
+            <div className="flex items-start gap-3">
+
+              <Building2 className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+
+              <div>
+
+                <p className="text-sm font-semibold text-amber-400">
+                  Veículos sem base
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-zinc-500">
+                  Existem {vehiclesWithoutBranch}{' '}
+                  {vehiclesWithoutBranch === 1
+                    ? 'veículo sem unidade vinculada.'
+                    : 'veículos sem unidade vinculada.'}{' '}
+                  Esses registros podem ser provenientes
+                  do modelo antigo de cadastro.
+                </p>
+
+              </div>
+
+            </div>
+
+          </section>
+        )}
+
+        {/* =================================================
+            LEGENDA
+        ================================================= */}
 
         <section className="grid gap-3 md:grid-cols-3">
 
@@ -478,75 +595,71 @@ export default function AdminVehiclesPage() {
 
         </section>
 
-        {/* BUSCA */}
+        {/* =================================================
+            BUSCA
+        ================================================= */}
 
-        <section className="flex flex-col gap-3 sm:flex-row">
+        <section className="relative">
 
-          <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
 
-            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-
-            <input
-              value={search}
-              onChange={(event) =>
-                setSearch(
-                  event.target.value
-                )
-              }
-              placeholder="Buscar placa, modelo, motorista, base, cidade ou status..."
-              className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900/70 pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            />
-
-          </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              void loadData()
+          <input
+            value={search}
+            onChange={(event) =>
+              setSearch(
+                event.target.value
+              )
             }
-            disabled={loading}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 text-sm font-medium text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-50"
-          >
-            <RefreshCw
-              className={[
-                'h-4 w-4',
-                loading
-                  ? 'animate-spin'
-                  : '',
-              ].join(' ')}
-            />
-
-            Atualizar
-          </button>
+            placeholder="Buscar placa, modelo, motorista, base, cidade, estado ou status..."
+            className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900/70 pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          />
 
         </section>
 
-        {/* MENSAGENS */}
+        {/* =================================================
+            MENSAGENS
+        ================================================= */}
 
         {errorMessage && (
-          <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">
-            {errorMessage}
-          </div>
+          <section className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+
+            <p className="text-sm font-semibold text-red-400">
+              Erro
+            </p>
+
+            <p className="mt-1 text-xs text-red-300/80">
+              {errorMessage}
+            </p>
+
+          </section>
         )}
 
         {successMessage && (
-          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-400">
-            {successMessage}
-          </div>
+          <section className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+
+            <p className="text-sm font-medium text-emerald-400">
+              {successMessage}
+            </p>
+
+          </section>
         )}
 
-        {/* LISTAGEM */}
+        {/* =================================================
+            LISTAGEM
+        ================================================= */}
 
         {loading ? (
 
           <div className="flex min-h-64 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/60">
 
             <div className="flex flex-col items-center gap-3">
+
               <Loader2 className="h-7 w-7 animate-spin text-blue-400" />
 
               <p className="text-sm text-zinc-500">
                 Carregando veículos...
               </p>
+
             </div>
 
           </div>
@@ -562,8 +675,8 @@ export default function AdminVehiclesPage() {
             </p>
 
             <p className="mt-1 text-sm text-zinc-500">
-              Tente alterar a busca ou
-              cadastre um novo veículo.
+              Nenhum registro corresponde aos filtros
+              informados.
             </p>
 
           </div>
@@ -595,34 +708,43 @@ export default function AdminVehiclesPage() {
                   )
 
                 const status =
-                  vehicle.status ?? 'Ativo'
+                  vehicle.status ??
+                  'Ativo'
 
                 const updating =
-                  updatingId === vehicle.id
+                  updatingId ===
+                  vehicle.id
 
                 return (
                   <article
                     key={vehicle.id}
                     className={[
                       'rounded-2xl border bg-zinc-900/60 p-5 transition sm:p-6',
+
                       status === 'Inativo'
                         ? 'border-zinc-800/70 opacity-80 hover:opacity-100'
-                        : status === 'Manutenção'
+                        : status ===
+                            'Manutenção'
                           ? 'border-amber-500/20'
                           : 'border-zinc-800 hover:border-zinc-700',
                     ].join(' ')}
                   >
 
-                    {/* TOPO */}
+                    {/* =========================================
+                        TOPO
+                    ========================================= */}
 
                     <div className="flex items-start justify-between gap-4">
 
                       <div
                         className={[
                           'rounded-xl border p-3',
-                          status === 'Manutenção'
+
+                          status ===
+                          'Manutenção'
                             ? 'border-amber-500/20 bg-amber-500/10 text-amber-400'
-                            : status === 'Inativo'
+                            : status ===
+                                'Inativo'
                               ? 'border-zinc-800 bg-zinc-950 text-zinc-600'
                               : 'border-blue-500/20 bg-blue-500/10 text-blue-400',
                         ].join(' ')}
@@ -631,12 +753,16 @@ export default function AdminVehiclesPage() {
                       </div>
 
                       <VehicleStatus
-                        status={vehicle.status}
+                        status={
+                          vehicle.status
+                        }
                       />
 
                     </div>
 
-                    {/* VEÍCULO */}
+                    {/* =========================================
+                        VEÍCULO
+                    ========================================= */}
 
                     <div className="mt-4">
 
@@ -644,7 +770,7 @@ export default function AdminVehiclesPage() {
                         {vehicle.model}
                       </h2>
 
-                      <p className="mt-1 font-mono text-sm font-semibold text-blue-400">
+                      <p className="mt-1 font-mono text-sm font-semibold uppercase text-blue-400">
                         {vehicle.plate}
                       </p>
 
@@ -654,7 +780,9 @@ export default function AdminVehiclesPage() {
 
                     </div>
 
-                    {/* DADOS */}
+                    {/* =========================================
+                        DADOS
+                    ========================================= */}
 
                     <div className="mt-5 space-y-3 border-t border-zinc-800 pt-4">
 
@@ -662,7 +790,8 @@ export default function AdminVehiclesPage() {
                         icon={Gauge}
                         label="Quilometragem"
                         value={`${(
-                          vehicle.mileage ?? 0
+                          vehicle.mileage ??
+                          0
                         ).toLocaleString(
                           'pt-BR'
                         )} km`}
@@ -703,20 +832,26 @@ export default function AdminVehiclesPage() {
 
                     </div>
 
-                    {/* BASE */}
+                    {/* =========================================
+                        BASE
+                    ========================================= */}
 
-                    {branch && (
+                    {branch ? (
+
                       <div
                         className={[
                           'mt-4 rounded-xl border p-3',
+
                           branch.active
                             ? 'border-emerald-500/10 bg-emerald-500/5'
                             : 'border-zinc-800 bg-zinc-950/50',
                         ].join(' ')}
                       >
+
                         <p
                           className={[
                             'text-xs font-semibold',
+
                             branch.active
                               ? 'text-emerald-400'
                               : 'text-zinc-500',
@@ -726,28 +861,77 @@ export default function AdminVehiclesPage() {
                             ? 'Base ativa'
                             : 'Base inativa'}
                         </p>
+
                       </div>
+
+                    ) : (
+
+                      <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+
+                        <p className="text-xs font-semibold text-amber-400">
+                          Veículo sem base vinculada
+                        </p>
+
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Registro precisa ser
+                          regularizado na estrutura
+                          operacional.
+                        </p>
+
+                      </div>
+
                     )}
 
-                    {/* EMAIL */}
+                    {/* =========================================
+                        MOTORISTA
+                    ========================================= */}
 
-                    {driver?.email && (
-                      <p className="mt-4 truncate rounded-xl bg-zinc-950/60 px-3 py-2 text-xs text-zinc-500">
-                        {driver.email}
-                      </p>
+                    {driver?.email ? (
+
+                      <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2">
+
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                          Motorista
+                        </p>
+
+                        <p className="mt-1 truncate text-xs text-zinc-500">
+                          {driver.email}
+                        </p>
+
+                      </div>
+
+                    ) : (
+
+                      <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-3">
+
+                        <p className="text-xs font-medium text-zinc-500">
+                          Nenhum motorista atribuído.
+                        </p>
+
+                        <p className="mt-1 text-[11px] leading-5 text-zinc-600">
+                          A atribuição é realizada pelo
+                          gestor responsável pela base.
+                        </p>
+
+                      </div>
+
                     )}
 
-                    {/* AÇÃO */}
+                    {/* =========================================
+                        AÇÃO
+                    ========================================= */}
 
                     <div className="mt-5 border-t border-zinc-800 pt-4">
 
-                      {status === 'Manutenção' ? (
+                      {status ===
+                      'Manutenção' ? (
 
                         <Link
                           href="/maintenance"
                           className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2 text-sm font-semibold text-amber-400 transition hover:bg-amber-500/10"
                         >
                           <Wrench className="h-4 w-4" />
+
                           Ver manutenção
                         </Link>
 
@@ -763,7 +947,9 @@ export default function AdminVehiclesPage() {
                           disabled={updating}
                           className={[
                             'inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50',
-                            status === 'Inativo'
+
+                            status ===
+                            'Inativo'
                               ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-400 hover:bg-emerald-500/10'
                               : 'border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500/10',
                           ].join(' ')}
@@ -774,7 +960,8 @@ export default function AdminVehiclesPage() {
                               <Loader2 className="h-4 w-4 animate-spin" />
                               Salvando...
                             </>
-                          ) : status === 'Inativo' ? (
+                          ) : status ===
+                            'Inativo' ? (
                             <>
                               <Power className="h-4 w-4" />
                               Ativar veículo
@@ -830,6 +1017,7 @@ function StatCard({
       <div className="flex items-center justify-between">
 
         <div>
+
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
             {label}
           </p>
@@ -837,6 +1025,7 @@ function StatCard({
           <p className="mt-2 text-3xl font-bold text-white">
             {value}
           </p>
+
         </div>
 
         <div className="rounded-xl bg-blue-500/10 p-3 text-blue-400">
@@ -896,6 +1085,7 @@ function StatusInfo({
         <Icon className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" />
 
         <div>
+
           <p className="text-sm font-semibold text-zinc-300">
             {title}
           </p>
@@ -903,6 +1093,7 @@ function StatusInfo({
           <p className="mt-1 text-xs leading-5 text-zinc-500">
             {description}
           </p>
+
         </div>
 
       </div>
@@ -919,24 +1110,28 @@ function VehicleStatus({
   const value =
     status ?? 'Ativo'
 
-  if (value === 'Manutenção') {
+  if (
+    value === 'Manutenção'
+  ) {
     return (
-      <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-400">
+      <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-400">
         Manutenção
       </span>
     )
   }
 
-  if (value === 'Inativo') {
+  if (
+    value === 'Inativo'
+  ) {
     return (
-      <span className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs font-medium text-zinc-400">
+      <span className="rounded-full border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-xs font-medium text-zinc-400">
         Inativo
       </span>
     )
   }
 
   return (
-    <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400">
+    <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400">
       Ativo
     </span>
   )

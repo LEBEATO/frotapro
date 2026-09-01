@@ -27,6 +27,10 @@ import {
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
 
+// =====================================================
+// TIPOS
+// =====================================================
+
 type FuelRecord = {
   id: string
   driver: string
@@ -51,17 +55,47 @@ type FuelRecord = {
 
 type ManagerProfile = {
   id: string
+  full_name: string
+  email: string
   role: string
   branch_id: string | null
   active: boolean
 }
 
-type BranchRow = {
+type StateData = {
+  name: string
+  uf: string
+}
+
+type BranchData = {
   id: string
   name: string
   code: string
   city: string
   active: boolean
+  states: StateData | StateData[] | null
+}
+
+type IconType = ComponentType<{
+  className?: string
+}>
+
+// =====================================================
+// AUXILIARES
+// =====================================================
+
+function getState(
+  branch: BranchData | null
+): StateData | null {
+  if (!branch?.states) {
+    return null
+  }
+
+  if (Array.isArray(branch.states)) {
+    return branch.states[0] ?? null
+  }
+
+  return branch.states
 }
 
 function calculateDistance(
@@ -70,9 +104,12 @@ function calculateDistance(
 ) {
   if (
     previousKm == null ||
-    currentKm == null ||
-    currentKm < previousKm
+    currentKm == null
   ) {
+    return null
+  }
+
+  if (currentKm < previousKm) {
     return null
   }
 
@@ -94,20 +131,24 @@ function calculateConsumption(
   return distance / liters
 }
 
+// =====================================================
+// PÁGINA
+// =====================================================
+
 export default function ManagerFuelPage() {
   const supabase = useMemo(
     () => createClient(),
     []
   )
 
-  const [records, setRecords] =
-    useState<FuelRecord[]>([])
-
-  const [manager, setManager] =
+  const [profile, setProfile] =
     useState<ManagerProfile | null>(null)
 
   const [branch, setBranch] =
-    useState<BranchRow | null>(null)
+    useState<BranchData | null>(null)
+
+  const [records, setRecords] =
+    useState<FuelRecord[]>([])
 
   const [search, setSearch] =
     useState('')
@@ -118,21 +159,37 @@ export default function ManagerFuelPage() {
   const [errorMessage, setErrorMessage] =
     useState('')
 
+  // =====================================================
+  // CARREGAR DADOS
+  // =====================================================
+
   const loadData = useCallback(async () => {
     setLoading(true)
     setErrorMessage('')
 
     try {
+      // ===============================================
+      // USUÁRIO LOGADO
+      // ===============================================
+
       const {
         data: { user },
         error: userError,
       } = await supabase.auth.getUser()
 
-      if (userError || !user) {
+      if (userError) {
+        throw userError
+      }
+
+      if (!user) {
         throw new Error(
           'Usuário não autenticado.'
         )
       }
+
+      // ===============================================
+      // PERFIL DO GESTOR
+      // ===============================================
 
       const {
         data: profileData,
@@ -141,6 +198,8 @@ export default function ManagerFuelPage() {
         .from('profiles')
         .select(`
           id,
+          full_name,
+          email,
           role,
           branch_id,
           active
@@ -158,39 +217,59 @@ export default function ManagerFuelPage() {
         )
       }
 
-      const profile =
+      const managerProfile =
         profileData as ManagerProfile
 
-      if (!profile.active) {
+      if (!managerProfile.active) {
         throw new Error(
-          'Este gestor está inativo.'
+          'Seu usuário está inativo.'
         )
       }
 
       if (
-        profile.role !==
+        managerProfile.role !==
         'branch_manager'
       ) {
         throw new Error(
-          'Esta página é exclusiva para gestores de base.'
+          'Esta página está disponível apenas para gestores de base.'
         )
       }
 
-      if (!profile.branch_id) {
+      if (!managerProfile.branch_id) {
         throw new Error(
-          'O gestor não possui base vinculada.'
+          'O gestor ainda não está vinculado a uma base.'
         )
       }
 
-      setManager(profile)
+      setProfile(managerProfile)
 
       const branchId =
-        profile.branch_id
+        managerProfile.branch_id
+
+      // ===============================================
+      // BASE + ABASTECIMENTOS
+      // ===============================================
 
       const [
-        fuelResponse,
         branchResponse,
+        fuelResponse,
       ] = await Promise.all([
+        supabase
+          .from('branches')
+          .select(`
+            id,
+            name,
+            code,
+            city,
+            active,
+            states (
+              name,
+              uf
+            )
+          `)
+          .eq('id', branchId)
+          .maybeSingle(),
+
         supabase
           .from('fuel_records')
           .select(`
@@ -214,43 +293,40 @@ export default function ManagerFuelPage() {
             created_at,
             updated_at
           `)
-          .eq('branch_id', branchId)
-          .order('created_at', {
-            ascending: false,
-          }),
-
-        supabase
-          .from('branches')
-          .select(`
-            id,
-            name,
-            code,
-            city,
-            active
-          `)
-          .eq('id', branchId)
-          .maybeSingle(),
+          .eq(
+            'branch_id',
+            branchId
+          )
+          .order(
+            'created_at',
+            {
+              ascending: false,
+            }
+          ),
       ])
-
-      if (fuelResponse.error) {
-        throw fuelResponse.error
-      }
 
       if (branchResponse.error) {
         throw branchResponse.error
       }
 
+      if (!branchResponse.data) {
+        throw new Error(
+          'Base do gestor não encontrada.'
+        )
+      }
+
+      if (fuelResponse.error) {
+        throw fuelResponse.error
+      }
+
+      setBranch(
+        branchResponse.data as BranchData
+      )
+
       setRecords(
         (
           fuelResponse.data ?? []
         ) as FuelRecord[]
-      )
-
-      setBranch(
-        (
-          branchResponse.data ??
-          null
-        ) as BranchRow | null
       )
     } catch (error) {
       console.error(
@@ -271,6 +347,19 @@ export default function ManagerFuelPage() {
   useEffect(() => {
     void loadData()
   }, [loadData])
+
+  // =====================================================
+  // ESTADO
+  // =====================================================
+
+  const state = useMemo(
+    () => getState(branch),
+    [branch]
+  )
+
+  // =====================================================
+  // FILTRO
+  // =====================================================
 
   const filteredRecords =
     useMemo(() => {
@@ -308,6 +397,10 @@ export default function ManagerFuelPage() {
       search,
     ])
 
+  // =====================================================
+  // INDICADORES
+  // =====================================================
+
   const totalLiters =
     records.reduce(
       (total, record) =>
@@ -328,10 +421,27 @@ export default function ManagerFuelPage() {
       0
     )
 
+  const priceRecords =
+    records.filter(
+      (record) =>
+        record.price_per_liter != null
+    )
+
   const averagePrice =
-    totalLiters > 0
+    totalLiters > 0 &&
+    totalAmount > 0
       ? totalAmount / totalLiters
-      : 0
+      : priceRecords.length > 0
+        ? priceRecords.reduce(
+            (total, record) =>
+              total +
+              Number(
+                record.price_per_liter ??
+                  0
+              ),
+            0
+          ) / priceRecords.length
+        : 0
 
   const totalDistance =
     records.reduce(
@@ -350,6 +460,72 @@ export default function ManagerFuelPage() {
       0
     )
 
+  // =====================================================
+  // LOADING
+  // =====================================================
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="flex min-h-[65vh] items-center justify-center">
+
+          <div className="text-center">
+
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-400" />
+
+            <p className="mt-4 text-sm text-zinc-500">
+              Carregando abastecimentos da base...
+            </p>
+
+          </div>
+
+        </div>
+      </AppShell>
+    )
+  }
+
+  // =====================================================
+  // ERRO
+  // =====================================================
+
+  if (errorMessage) {
+    return (
+      <AppShell>
+        <div className="mx-auto max-w-3xl">
+
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6">
+
+            <h1 className="text-lg font-bold text-white">
+              Não foi possível carregar os abastecimentos
+            </h1>
+
+            <p className="mt-2 text-sm text-red-400">
+              {errorMessage}
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                void loadData()
+              }
+              className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 text-sm font-semibold text-red-300 transition hover:bg-red-500/20"
+            >
+              <RefreshCw className="h-4 w-4" />
+
+              Tentar novamente
+            </button>
+
+          </div>
+
+        </div>
+      </AppShell>
+    )
+  }
+
+  // =====================================================
+  // UI
+  // =====================================================
+
   return (
     <AppShell>
       <div className="space-y-6 sm:space-y-8">
@@ -362,7 +538,8 @@ export default function ManagerFuelPage() {
 
             <Link
               href="/manager"
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
+              aria-label="Voltar ao painel"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 transition hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
             >
               <ArrowLeft className="h-4 w-4" />
             </Link>
@@ -370,15 +547,15 @@ export default function ManagerFuelPage() {
             <div>
 
               <p className="text-sm font-semibold text-blue-400">
-                Gestão da unidade
+                Gestão da base
               </p>
 
-              <h1 className="mt-1 text-2xl font-bold text-white sm:text-3xl">
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">
                 Abastecimentos
               </h1>
 
-              <p className="mt-2 text-sm text-zinc-400">
-                Acompanhe os abastecimentos dos veículos da sua base.
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+                Acompanhe os abastecimentos, custos e consumo dos veículos da sua unidade.
               </p>
 
             </div>
@@ -390,17 +567,9 @@ export default function ManagerFuelPage() {
             onClick={() =>
               void loadData()
             }
-            disabled={loading}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-50"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-800"
           >
-            <RefreshCw
-              className={[
-                'h-4 w-4',
-                loading
-                  ? 'animate-spin'
-                  : '',
-              ].join(' ')}
-            />
+            <RefreshCw className="h-4 w-4" />
 
             Atualizar
           </button>
@@ -409,35 +578,54 @@ export default function ManagerFuelPage() {
 
         {/* BASE */}
 
-        {branch && (
-          <section className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5">
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 sm:p-6">
 
-            <div className="flex items-start gap-3">
+          <div className="flex items-start gap-4">
 
-              <div className="rounded-xl bg-blue-500/10 p-3 text-blue-400">
-                <Building2 className="h-5 w-5" />
-              </div>
+            <div className="rounded-xl bg-blue-500/10 p-3 text-blue-400">
+              <Building2 className="h-6 w-6" />
+            </div>
 
-              <div>
+            <div className="min-w-0">
 
-                <p className="text-xs font-semibold uppercase tracking-wider text-blue-400">
-                  Base responsável
+              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                Base responsável
+              </p>
+
+              <h2 className="mt-1 text-xl font-bold text-white">
+                {branch?.name ??
+                  'Base não identificada'}
+              </h2>
+
+              <p className="mt-1 text-sm text-zinc-400">
+                {branch?.city}
+
+                {state?.uf
+                  ? ` - ${state.uf}`
+                  : ''}
+              </p>
+
+              {branch?.code && (
+                <p className="mt-1 text-xs text-zinc-600">
+                  Código da base:{' '}
+                  {branch.code}
                 </p>
+              )}
 
-                <p className="mt-1 font-bold text-white">
-                  {branch.name}
+              {profile && (
+                <p className="mt-2 text-xs text-zinc-600">
+                  Gestor:{' '}
+                  <span className="text-zinc-400">
+                    {profile.full_name}
+                  </span>
                 </p>
-
-                <p className="mt-1 text-sm text-zinc-500">
-                  {branch.city} • Código {branch.code}
-                </p>
-
-              </div>
+              )}
 
             </div>
 
-          </section>
-        )}
+          </div>
+
+        </section>
 
         {/* INDICADORES */}
 
@@ -485,6 +673,30 @@ export default function ManagerFuelPage() {
 
         </section>
 
+        {/* INFORMAÇÃO */}
+
+        <section className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+
+          <div className="flex items-start gap-3">
+
+            <Fuel className="mt-0.5 h-5 w-5 shrink-0 text-blue-400" />
+
+            <div>
+
+              <p className="text-sm font-semibold text-blue-400">
+                Abastecimentos da sua unidade
+              </p>
+
+              <p className="mt-1 text-xs leading-5 text-zinc-500">
+                Como gestor, você visualiza somente os registros vinculados à sua base.
+              </p>
+
+            </div>
+
+          </div>
+
+        </section>
+
         {/* BUSCA */}
 
         <section className="relative">
@@ -505,52 +717,20 @@ export default function ManagerFuelPage() {
 
         </section>
 
-        {/* ERRO */}
+        {/* REGISTROS */}
 
-        {errorMessage && (
-          <section className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
-
-            <p className="text-sm font-semibold text-red-400">
-              Erro ao carregar abastecimentos
-            </p>
-
-            <p className="mt-1 text-xs text-red-300/80">
-              {errorMessage}
-            </p>
-
-          </section>
-        )}
-
-        {/* CONTEÚDO */}
-
-        {loading ? (
-
-          <div className="flex min-h-64 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/60">
-
-            <div className="text-center">
-
-              <Loader2 className="mx-auto h-7 w-7 animate-spin text-blue-400" />
-
-              <p className="mt-3 text-sm text-zinc-500">
-                Carregando abastecimentos...
-              </p>
-
-            </div>
-
-          </div>
-
-        ) : filteredRecords.length === 0 ? (
+        {filteredRecords.length === 0 ? (
 
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-10 text-center">
 
             <Fuel className="mx-auto h-10 w-10 text-zinc-700" />
 
-            <p className="mt-4 font-semibold text-zinc-300">
+            <p className="mt-4 font-medium text-zinc-300">
               Nenhum abastecimento encontrado
             </p>
 
             <p className="mt-1 text-sm text-zinc-500">
-              Ainda não existem abastecimentos registrados nesta base.
+              Ainda não existem registros de abastecimento nesta base.
             </p>
 
           </div>
@@ -561,7 +741,6 @@ export default function ManagerFuelPage() {
 
             {filteredRecords.map(
               (record) => {
-
                 const distance =
                   calculateDistance(
                     record.previous_km,
@@ -580,17 +759,19 @@ export default function ManagerFuelPage() {
                     className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 transition hover:border-zinc-700 sm:p-6"
                   >
 
+                    {/* VEÍCULO */}
+
                     <div className="flex items-start justify-between gap-4">
 
-                      <div className="flex items-start gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
 
                         <div className="rounded-xl bg-blue-500/10 p-3 text-blue-400">
                           <Fuel className="h-5 w-5" />
                         </div>
 
-                        <div>
+                        <div className="min-w-0">
 
-                          <p className="font-mono text-sm font-bold uppercase text-white">
+                          <p className="font-mono text-sm font-bold uppercase tracking-wider text-white">
                             {record.vehicle_plate}
                           </p>
 
@@ -602,13 +783,17 @@ export default function ManagerFuelPage() {
 
                       </div>
 
-                      <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-400">
-                        {record.fuel_type}
-                      </span>
+                      <FuelBadge
+                        fuelType={
+                          record.fuel_type
+                        }
+                      />
 
                     </div>
 
-                    <div className="mt-5 grid gap-4 border-t border-zinc-800 pt-5 sm:grid-cols-2">
+                    {/* MOTORISTA */}
+
+                    <div className="mt-5 grid grid-cols-1 gap-4 border-t border-zinc-800 pt-5 sm:grid-cols-2">
 
                       <Info
                         icon={UserRound}
@@ -627,6 +812,12 @@ export default function ManagerFuelPage() {
                           'Não informado'
                         }
                       />
+
+                    </div>
+
+                    {/* FINANCEIRO */}
+
+                    <div className="mt-5 grid grid-cols-1 gap-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 sm:grid-cols-3">
 
                       <Info
                         icon={Droplets}
@@ -652,9 +843,23 @@ export default function ManagerFuelPage() {
                         }
                       />
 
+                      <Info
+                        icon={Fuel}
+                        label="Preço por litro"
+                        value={
+                          record.price_per_liter != null
+                            ? `${formatCurrency(
+                                record.price_per_liter
+                              )}/L`
+                            : 'Não informado'
+                        }
+                      />
+
                     </div>
 
-                    <div className="mt-4 grid grid-cols-3 gap-3">
+                    {/* QUILOMETRAGEM */}
+
+                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
 
                       <MetricBox
                         label="KM anterior"
@@ -663,7 +868,7 @@ export default function ManagerFuelPage() {
                             ? `${record.previous_km.toLocaleString(
                                 'pt-BR'
                               )} km`
-                            : '-'
+                            : 'Não informado'
                         }
                       />
 
@@ -674,34 +879,67 @@ export default function ManagerFuelPage() {
                             ? `${record.current_km.toLocaleString(
                                 'pt-BR'
                               )} km`
-                            : '-'
+                            : 'Não informado'
                         }
                       />
 
                       <MetricBox
-                        label="Consumo"
+                        label="KM percorrido"
                         value={
-                          consumption != null
-                            ? `${formatNumber(
-                                consumption
-                              )} km/L`
-                            : '-'
+                          distance != null
+                            ? `${distance.toLocaleString(
+                                'pt-BR'
+                              )} km`
+                            : 'Não calculado'
                         }
                       />
 
                     </div>
 
-                    <div className="mt-4 border-t border-zinc-800 pt-4">
+                    {/* CONSUMO */}
 
-                      <p className="text-xs text-zinc-500">
-                        Registrado em{' '}
-                        <span className="font-medium text-zinc-300">
-                          {formatDate(
-                            record.submitted_at ??
-                              record.created_at
-                          )}
-                        </span>
-                      </p>
+                    <div className="mt-4 rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-4">
+
+                      <div className="flex items-center justify-between gap-4">
+
+                        <div>
+
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-500">
+                            Consumo estimado
+                          </p>
+
+                          <p className="mt-1 text-xl font-bold text-white">
+
+                            {consumption != null
+                              ? `${formatNumber(
+                                  consumption
+                                )} km/L`
+                              : 'Não calculado'}
+
+                          </p>
+
+                        </div>
+
+                        <Gauge className="h-6 w-6 text-emerald-500" />
+
+                      </div>
+
+                    </div>
+
+                    {/* DATA */}
+
+                    <div className="mt-4 flex flex-col gap-1 border-t border-zinc-800 pt-4 sm:flex-row sm:items-center sm:justify-between">
+
+                      <span className="text-xs text-zinc-600">
+                        Registrado em
+                      </span>
+
+                      <span className="text-xs font-medium text-zinc-400">
+                        {formatDate(
+                          record.submitted_at ??
+                            record.created_at
+                        )}
+                      </span>
 
                     </div>
 
@@ -719,10 +957,9 @@ export default function ManagerFuelPage() {
   )
 }
 
-type IconType =
-  ComponentType<{
-    className?: string
-  }>
+// =====================================================
+// COMPONENTES
+// =====================================================
 
 function StatCard({
   label,
@@ -744,7 +981,7 @@ function StatCard({
             {label}
           </p>
 
-          <p className="mt-2 text-2xl font-bold text-white sm:text-3xl">
+          <p className="mt-2 break-words text-2xl font-bold text-white sm:text-3xl">
             {value}
           </p>
 
@@ -780,7 +1017,7 @@ function Info({
           {label}
         </p>
 
-        <p className="mt-1 text-sm font-medium text-zinc-300">
+        <p className="mt-1 break-words text-sm font-medium text-zinc-300">
           {value}
         </p>
 
@@ -798,9 +1035,9 @@ function MetricBox({
   value: string
 }) {
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
+    <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
 
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">
         {label}
       </p>
 
@@ -811,6 +1048,23 @@ function MetricBox({
     </div>
   )
 }
+
+function FuelBadge({
+  fuelType,
+}: {
+  fuelType: string
+}) {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-400">
+      {fuelType ||
+        'Não informado'}
+    </span>
+  )
+}
+
+// =====================================================
+// FORMATADORES
+// =====================================================
 
 function formatCurrency(
   value: number
