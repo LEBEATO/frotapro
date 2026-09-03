@@ -387,35 +387,34 @@ export default function ManagerChecklistsPage() {
       // 5. ÚLTIMO CHECKLIST POR VEÍCULO
       // ===============================================
 
-      const latestByPlate =
+      const latestByPlateMap: Record<
+        string,
+        Checklist
+      > = {}
+
+      const checklistData =
+        (data ?? []) as Checklist[]
+
+      for (
+        const current of checklistData
+      ) {
+        const plate =
+          current.vehicle_plate
+            ?.trim()
+            .toUpperCase() ||
+          current.id
+
+        if (
+          !latestByPlateMap[plate]
+        ) {
+          latestByPlateMap[plate] =
+            current
+        }
+      }
+
+      const latestByPlate: Checklist[] =
         Object.values(
-          (
-            data ?? []
-          ).reduce(
-            (
-              acc: Record<
-                string,
-                Checklist
-              >,
-              current: Checklist
-            ) => {
-              const plate =
-                current.vehicle_plate
-                  ?.trim()
-                  .toUpperCase() ||
-                current.id
-
-              if (
-                !acc[plate]
-              ) {
-                acc[plate] =
-                  current
-              }
-
-              return acc
-            },
-            {}
-          )
+          latestByPlateMap
         )
 
       // ===============================================
@@ -423,7 +422,10 @@ export default function ManagerChecklistsPage() {
       // ===============================================
 
       latestByPlate.sort(
-        (a, b) => {
+        (
+          a: Checklist,
+          b: Checklist
+        ) => {
           if (
             a.has_issue ===
             b.has_issue

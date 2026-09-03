@@ -1,15 +1,10 @@
 import {
-  BarChart3,
   Building2,
   Car,
   ClipboardCheck,
   Fuel,
   Gauge,
-  History,
   MapPinned,
-  Settings,
-  ShieldCheck,
-  TriangleAlert,
   UserCog,
   Users,
   Wrench,
@@ -29,6 +24,10 @@ type DashboardMenu = {
   main: DashboardMenuItem[]
   system: DashboardMenuItem[]
 }
+
+// =====================================================
+// ADMIN
+// =====================================================
 
 const adminMenu: DashboardMenu = {
   main: [
@@ -77,26 +76,14 @@ const adminMenu: DashboardMenu = {
       href: '/maintenance',
       icon: Wrench,
     },
-    {
-      label: 'Relatórios',
-      href: '/admin/reports',
-      icon: BarChart3,
-    },
   ],
 
-  system: [
-    {
-      label: 'Auditoria',
-      href: '/admin/audit',
-      icon: ShieldCheck,
-    },
-    {
-      label: 'Configurações',
-      href: '/admin/settings',
-      icon: Settings,
-    },
-  ],
+  system: [],
 }
+
+// =====================================================
+// GESTOR DA BASE
+// =====================================================
 
 const managerMenu: DashboardMenu = {
   main: [
@@ -135,6 +122,10 @@ const managerMenu: DashboardMenu = {
   system: [],
 }
 
+// =====================================================
+// MOTORISTA
+// =====================================================
+
 const driverMenu: DashboardMenu = {
   main: [
     {
@@ -143,12 +134,7 @@ const driverMenu: DashboardMenu = {
       icon: Gauge,
     },
     {
-      label: 'Meu veículo',
-      href: '/driver/vehicle',
-      icon: Car,
-    },
-    {
-      label: 'Checklist diário',
+      label: 'Checklist',
       href: '/driver/checklist',
       icon: ClipboardCheck,
     },
@@ -157,20 +143,14 @@ const driverMenu: DashboardMenu = {
       href: '/driver/fuel',
       icon: Fuel,
     },
-    {
-      label: 'Ocorrências',
-      href: '/driver/issues',
-      icon: TriangleAlert,
-    },
-    {
-      label: 'Histórico',
-      href: '/driver/history',
-      icon: History,
-    },
   ],
 
   system: [],
 }
+
+// =====================================================
+// MENU POR PERFIL
+// =====================================================
 
 export function getDashboardMenu(
   role: UserRole

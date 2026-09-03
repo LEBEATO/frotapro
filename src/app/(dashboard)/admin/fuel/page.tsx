@@ -27,6 +27,10 @@ import {
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
 
+// =====================================================
+// TIPOS
+// =====================================================
+
 type FuelRecord = {
   id: string
   driver: string
@@ -49,10 +53,9 @@ type FuelRecord = {
   updated_at: string
 }
 
-type ManagerProfile = {
+type AdminProfile = {
   id: string
   role: string
-  branch_id: string | null
   active: boolean
 }
 
@@ -63,6 +66,14 @@ type BranchRow = {
   city: string
   active: boolean
 }
+
+type IconType = ComponentType<{
+  className?: string
+}>
+
+// =====================================================
+// AUXILIARES
+// =====================================================
 
 function calculateDistance(
   previousKm: number | null,
@@ -94,7 +105,11 @@ function calculateConsumption(
   return distance / liters
 }
 
-export default function ManagerFuelPage() {
+// =====================================================
+// PÁGINA ADMIN GLOBAL
+// =====================================================
+
+export default function AdminFuelPage() {
   const supabase = useMemo(
     () => createClient(),
     []
@@ -103,11 +118,8 @@ export default function ManagerFuelPage() {
   const [records, setRecords] =
     useState<FuelRecord[]>([])
 
-  const [manager, setManager] =
-    useState<ManagerProfile | null>(null)
-
-  const [branch, setBranch] =
-    useState<BranchRow | null>(null)
+  const [branches, setBranches] =
+    useState<BranchRow[]>([])
 
   const [search, setSearch] =
     useState('')
@@ -118,21 +130,37 @@ export default function ManagerFuelPage() {
   const [errorMessage, setErrorMessage] =
     useState('')
 
+  // =====================================================
+  // CARREGAR DADOS
+  // =====================================================
+
   const loadData = useCallback(async () => {
     setLoading(true)
     setErrorMessage('')
 
     try {
+      // ===============================================
+      // USUÁRIO LOGADO
+      // ===============================================
+
       const {
         data: { user },
         error: userError,
       } = await supabase.auth.getUser()
 
-      if (userError || !user) {
+      if (userError) {
+        throw userError
+      }
+
+      if (!user) {
         throw new Error(
           'Usuário não autenticado.'
         )
       }
+
+      // ===============================================
+      // PERFIL ADMIN
+      // ===============================================
 
       const {
         data: profileData,
@@ -142,7 +170,6 @@ export default function ManagerFuelPage() {
         .select(`
           id,
           role,
-          branch_id,
           active
         `)
         .eq('id', user.id)
@@ -154,42 +181,40 @@ export default function ManagerFuelPage() {
 
       if (!profileData) {
         throw new Error(
-          'Perfil do gestor não encontrado.'
+          'Perfil administrativo não encontrado.'
         )
       }
 
       const profile =
-        profileData as ManagerProfile
+        profileData as AdminProfile
 
       if (!profile.active) {
         throw new Error(
-          'Este gestor está inativo.'
+          'Este usuário está inativo.'
         )
       }
 
-      if (
-        profile.role !==
-        'branch_manager'
-      ) {
+      // ===============================================
+      // ADMIN GLOBAL / FLEET MANAGER
+      // ===============================================
+
+      const isGlobalManager =
+        profile.role === 'admin' ||
+        profile.role === 'fleet_manager'
+
+      if (!isGlobalManager) {
         throw new Error(
-          'Esta página é exclusiva para gestores de base.'
+          'Esta página é exclusiva para a administração global.'
         )
       }
 
-      if (!profile.branch_id) {
-        throw new Error(
-          'O gestor não possui base vinculada.'
-        )
-      }
-
-      setManager(profile)
-
-      const branchId =
-        profile.branch_id
+      // ===============================================
+      // ADMIN NÃO FILTRA POR BRANCH_ID
+      // ===============================================
 
       const [
         fuelResponse,
-        branchResponse,
+        branchesResponse,
       ] = await Promise.all([
         supabase
           .from('fuel_records')
@@ -214,7 +239,6 @@ export default function ManagerFuelPage() {
             created_at,
             updated_at
           `)
-          .eq('branch_id', branchId)
           .order('created_at', {
             ascending: false,
           }),
@@ -228,16 +252,17 @@ export default function ManagerFuelPage() {
             city,
             active
           `)
-          .eq('id', branchId)
-          .maybeSingle(),
+          .order('name', {
+            ascending: true,
+          }),
       ])
 
       if (fuelResponse.error) {
         throw fuelResponse.error
       }
 
-      if (branchResponse.error) {
-        throw branchResponse.error
+      if (branchesResponse.error) {
+        throw branchesResponse.error
       }
 
       setRecords(
@@ -246,15 +271,14 @@ export default function ManagerFuelPage() {
         ) as FuelRecord[]
       )
 
-      setBranch(
+      setBranches(
         (
-          branchResponse.data ??
-          null
-        ) as BranchRow | null
+          branchesResponse.data ?? []
+        ) as BranchRow[]
       )
     } catch (error) {
       console.error(
-        'Erro ao carregar abastecimentos da base:',
+        'Erro ao carregar abastecimentos globais:',
         error
       )
 
@@ -272,6 +296,25 @@ export default function ManagerFuelPage() {
     void loadData()
   }, [loadData])
 
+  // =====================================================
+  // MAPA DAS BASES
+  // =====================================================
+
+  const branchMap = useMemo(() => {
+    return new Map(
+      branches.map(
+        (branch) => [
+          branch.id,
+          branch,
+        ]
+      )
+    )
+  }, [branches])
+
+  // =====================================================
+  // FILTRO
+  // =====================================================
+
   const filteredRecords =
     useMemo(() => {
       const query =
@@ -285,6 +328,13 @@ export default function ManagerFuelPage() {
 
       return records.filter(
         (record) => {
+          const branch =
+            record.branch_id
+              ? branchMap.get(
+                  record.branch_id
+                )
+              : null
+
           const values = [
             record.driver,
             record.driver_email,
@@ -292,6 +342,9 @@ export default function ManagerFuelPage() {
             record.vehicle_plate,
             record.fuel_type,
             record.fuel_station,
+            branch?.name,
+            branch?.code,
+            branch?.city,
           ]
 
           return values
@@ -306,7 +359,12 @@ export default function ManagerFuelPage() {
     }, [
       records,
       search,
+      branchMap,
     ])
+
+  // =====================================================
+  // INDICADORES
+  // =====================================================
 
   const totalLiters =
     records.reduce(
@@ -350,19 +408,41 @@ export default function ManagerFuelPage() {
       0
     )
 
+  const activeBranches =
+    new Set(
+      records
+        .map(
+          (record) =>
+            record.branch_id
+        )
+        .filter(
+          (
+            branchId
+          ): branchId is string =>
+            Boolean(branchId)
+        )
+    ).size
+
+  // =====================================================
+  // UI
+  // =====================================================
+
   return (
     <AppShell>
       <div className="space-y-6 sm:space-y-8">
 
-        {/* CABEÇALHO */}
+        {/* =================================================
+            CABEÇALHO
+        ================================================= */}
 
         <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
 
           <div className="flex items-start gap-3">
 
             <Link
-              href="/manager"
+              href="/admin"
               className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
+              aria-label="Voltar ao painel administrativo"
             >
               <ArrowLeft className="h-4 w-4" />
             </Link>
@@ -370,15 +450,16 @@ export default function ManagerFuelPage() {
             <div>
 
               <p className="text-sm font-semibold text-blue-400">
-                Gestão da unidade
+                Administração global
               </p>
 
               <h1 className="mt-1 text-2xl font-bold text-white sm:text-3xl">
                 Abastecimentos
               </h1>
 
-              <p className="mt-2 text-sm text-zinc-400">
-                Acompanhe os abastecimentos dos veículos da sua base.
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+                Acompanhe os abastecimentos de todos os veículos,
+                motoristas e bases da operação.
               </p>
 
             </div>
@@ -391,7 +472,7 @@ export default function ManagerFuelPage() {
               void loadData()
             }
             disabled={loading}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-50"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <RefreshCw
               className={[
@@ -407,41 +488,44 @@ export default function ManagerFuelPage() {
 
         </section>
 
-        {/* BASE */}
+        {/* =================================================
+            VISÃO GLOBAL
+        ================================================= */}
 
-        {branch && (
-          <section className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5">
+        <section className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5">
 
-            <div className="flex items-start gap-3">
+          <div className="flex items-start gap-3">
 
-              <div className="rounded-xl bg-blue-500/10 p-3 text-blue-400">
-                <Building2 className="h-5 w-5" />
-              </div>
+            <div className="rounded-xl bg-blue-500/10 p-3 text-blue-400">
+              <Building2 className="h-5 w-5" />
+            </div>
 
-              <div>
+            <div>
 
-                <p className="text-xs font-semibold uppercase tracking-wider text-blue-400">
-                  Base responsável
-                </p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-400">
+                Visão nacional
+              </p>
 
-                <p className="mt-1 font-bold text-white">
-                  {branch.name}
-                </p>
+              <p className="mt-1 font-bold text-white">
+                Todas as bases
+              </p>
 
-                <p className="mt-1 text-sm text-zinc-500">
-                  {branch.city} • Código {branch.code}
-                </p>
-
-              </div>
+              <p className="mt-1 text-sm leading-6 text-zinc-500">
+                O administrador possui acesso global aos registros de
+                abastecimento de todas as unidades.
+              </p>
 
             </div>
 
-          </section>
-        )}
+          </div>
 
-        {/* INDICADORES */}
+        </section>
 
-        <section className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+        {/* =================================================
+            INDICADORES
+        ================================================= */}
+
+        <section className="grid grid-cols-2 gap-4 xl:grid-cols-3 2xl:grid-cols-6">
 
           <StatCard
             label="Abastecimentos"
@@ -449,6 +533,14 @@ export default function ManagerFuelPage() {
               records.length
             )}
             icon={Fuel}
+          />
+
+          <StatCard
+            label="Bases"
+            value={String(
+              activeBranches
+            )}
+            icon={Building2}
           />
 
           <StatCard
@@ -485,7 +577,9 @@ export default function ManagerFuelPage() {
 
         </section>
 
-        {/* BUSCA */}
+        {/* =================================================
+            BUSCA
+        ================================================= */}
 
         <section className="relative">
 
@@ -499,13 +593,15 @@ export default function ManagerFuelPage() {
                 event.target.value
               )
             }
-            placeholder="Buscar motorista, placa, veículo, combustível ou posto..."
+            placeholder="Buscar motorista, placa, veículo, base, cidade, combustível ou posto..."
             className="min-h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900/70 py-2.5 pl-10 pr-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
           />
 
         </section>
 
-        {/* ERRO */}
+        {/* =================================================
+            ERRO
+        ================================================= */}
 
         {errorMessage && (
           <section className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
@@ -521,7 +617,9 @@ export default function ManagerFuelPage() {
           </section>
         )}
 
-        {/* CONTEÚDO */}
+        {/* =================================================
+            CONTEÚDO
+        ================================================= */}
 
         {loading ? (
 
@@ -532,7 +630,7 @@ export default function ManagerFuelPage() {
               <Loader2 className="mx-auto h-7 w-7 animate-spin text-blue-400" />
 
               <p className="mt-3 text-sm text-zinc-500">
-                Carregando abastecimentos...
+                Carregando abastecimentos de todas as bases...
               </p>
 
             </div>
@@ -550,7 +648,8 @@ export default function ManagerFuelPage() {
             </p>
 
             <p className="mt-1 text-sm text-zinc-500">
-              Ainda não existem abastecimentos registrados nesta base.
+              Ainda não existem abastecimentos registrados
+              ou nenhum registro corresponde à busca.
             </p>
 
           </div>
@@ -574,11 +673,20 @@ export default function ManagerFuelPage() {
                     record.liters
                   )
 
+                const branch =
+                  record.branch_id
+                    ? branchMap.get(
+                        record.branch_id
+                      )
+                    : null
+
                 return (
                   <article
                     key={record.id}
                     className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 transition hover:border-zinc-700 sm:p-6"
                   >
+
+                    {/* CABEÇALHO DO CARD */}
 
                     <div className="flex items-start justify-between gap-4">
 
@@ -607,6 +715,41 @@ export default function ManagerFuelPage() {
                       </span>
 
                     </div>
+
+                    {/* BASE */}
+
+                    <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+
+                      <div className="flex items-start gap-3">
+
+                        <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
+
+                        <div>
+
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">
+                            Base
+                          </p>
+
+                          <p className="mt-1 text-sm font-semibold text-zinc-300">
+                            {branch?.name ??
+                              'Base não identificada'}
+                          </p>
+
+                          {branch && (
+                            <p className="mt-1 text-xs text-zinc-500">
+                              {branch.city}
+                              {' • '}
+                              Código {branch.code}
+                            </p>
+                          )}
+
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                    {/* DADOS */}
 
                     <div className="mt-5 grid gap-4 border-t border-zinc-800 pt-5 sm:grid-cols-2">
 
@@ -654,6 +797,8 @@ export default function ManagerFuelPage() {
 
                     </div>
 
+                    {/* MÉTRICAS */}
+
                     <div className="mt-4 grid grid-cols-3 gap-3">
 
                       <MetricBox
@@ -691,6 +836,8 @@ export default function ManagerFuelPage() {
 
                     </div>
 
+                    {/* DATA */}
+
                     <div className="mt-4 border-t border-zinc-800 pt-4">
 
                       <p className="text-xs text-zinc-500">
@@ -719,10 +866,9 @@ export default function ManagerFuelPage() {
   )
 }
 
-type IconType =
-  ComponentType<{
-    className?: string
-  }>
+// =====================================================
+// CARD DE INDICADOR
+// =====================================================
 
 function StatCard({
   label,
@@ -744,7 +890,7 @@ function StatCard({
             {label}
           </p>
 
-          <p className="mt-2 text-2xl font-bold text-white sm:text-3xl">
+          <p className="mt-2 wrap-break-word text-xl font-bold text-white sm:text-2xl">
             {value}
           </p>
 
@@ -759,6 +905,10 @@ function StatCard({
     </article>
   )
 }
+
+// =====================================================
+// INFORMAÇÃO
+// =====================================================
 
 function Info({
   icon: Icon,
@@ -780,7 +930,7 @@ function Info({
           {label}
         </p>
 
-        <p className="mt-1 text-sm font-medium text-zinc-300">
+        <p className="mt-1 wrap-break-word text-sm font-medium text-zinc-300">
           {value}
         </p>
 
@@ -789,6 +939,10 @@ function Info({
     </div>
   )
 }
+
+// =====================================================
+// CAIXA DE MÉTRICA
+// =====================================================
 
 function MetricBox({
   label,
@@ -812,6 +966,10 @@ function MetricBox({
   )
 }
 
+// =====================================================
+// FORMATAÇÃO
+// =====================================================
+
 function formatCurrency(
   value: number
 ) {
@@ -821,7 +979,11 @@ function formatCurrency(
       style: 'currency',
       currency: 'BRL',
     }
-  ).format(value)
+  ).format(
+    Number.isFinite(value)
+      ? value
+      : 0
+  )
 }
 
 function formatNumber(
@@ -832,7 +994,11 @@ function formatNumber(
     {
       maximumFractionDigits: 2,
     }
-  ).format(value)
+  ).format(
+    Number.isFinite(value)
+      ? value
+      : 0
+  )
 }
 
 function formatDate(

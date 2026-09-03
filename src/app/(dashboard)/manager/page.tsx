@@ -579,7 +579,7 @@ export default function ManagerPage() {
             <QuickAccessCard
               title="Manutenções"
               description="Acompanhe veículos e ocorrências em manutenção."
-              href="/manager/maintenance"
+              href="/maintenance"
               icon={Wrench}
             />
           </div>

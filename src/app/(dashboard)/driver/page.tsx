@@ -1,103 +1,84 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import Image from 'next/image'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+
 import {
-  useForm,
-  useWatch,
-  type FieldPath,
-} from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
+
 import {
   AlertTriangle,
-  Camera,
+  CalendarDays,
   Car,
-  Check,
   CheckCircle2,
+  ChevronRight,
+  ClipboardCheck,
+  Fuel,
+  Gauge,
+  History,
   Loader2,
-  LogOut,
-  X,
+  RefreshCw,
+  Route,
+  UserRound,
+  Wrench,
 } from 'lucide-react'
 
+import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
 
-const INSPECTION_ITEMS = [
-  { id: 'limpadorParabrisa', label: 'LIMPADOR PARABRISA' },
-  { id: 'buzina', label: 'BUZINA' },
-  { id: 'farois', label: 'FARÓIS' },
-  { id: 'lanternasDianteiras', label: 'LANTERNAS DIANTEIRAS' },
-  { id: 'lanternasTraseiras', label: 'LANTERNAS TRASEIRAS' },
-  { id: 'setasDianteiras', label: 'SETAS DIANTEIRAS' },
-  { id: 'setasTraseiras', label: 'SETAS TRASEIRAS' },
-  { id: 'luzFreio', label: 'LUZ DE FREIO' },
-  { id: 'luzRe', label: 'LUZ DE RÉ' },
-  { id: 'triangulo', label: 'TRIÂNGULO' },
-  { id: 'macaco', label: 'MACACO' },
-  { id: 'chaveRoda', label: 'CHAVE DE RODA' },
-  { id: 'espelhosRetrovisores', label: 'ESPELHOS RETROVISORES' },
-  { id: 'painel', label: 'PAINEL' },
-  { id: 'pneus', label: 'PNEUS' },
-  { id: 'estepe', label: 'ESTEPE' },
-  { id: 'vidros', label: 'VIDROS' },
-  { id: 'tapetes', label: 'TAPETES' },
-  { id: 'lataria', label: 'LATARIA' },
-  { id: 'plotagem', label: 'PLOTAGEM (ADESIVO)' },
-  { id: 'suporteEscada', label: 'SUPORTE DE ESCADA' },
-] as const
+// =====================================================
+// TIPOS
+// =====================================================
 
-type InspectionItemId =
-  (typeof INSPECTION_ITEMS)[number]['id']
+type DriverProfile = {
+  id: string
+  full_name: string
+  email: string
+  branch_id: string | null
+  active: boolean
+}
 
-const itemsShape = INSPECTION_ITEMS.reduce(
-  (acc, item) => {
-    acc[item.id] = z.enum(['SIM', 'NÃO'], {
-      required_error: `Selecione SIM ou NÃO para ${item.label}`,
-    })
-
-    return acc
-  },
-  {} as Record<
-    InspectionItemId,
-    z.ZodEnum<['SIM', 'NÃO']>
-  >
-)
-
-const checklistSchema = z.object({
-  vehiclePlate: z
-    .string()
-    .min(1, 'Informe a placa do veículo'),
-
-  kmAtual: z
-    .string()
-    .min(1, 'A quilometragem é obrigatória')
-    .refine(
-      (value) =>
-        !Number.isNaN(Number(value)) &&
-        Number(value) > 0,
-      {
-        message: 'Informe um valor numérico válido para o KM',
-      }
-    ),
-
-  items: z.object(itemsShape),
-
-  observacoes: z.string().optional(),
-})
-
-type ChecklistFormData = z.infer<typeof checklistSchema>
-
-interface VehicleData {
+type VehicleData = {
   id: string
   model: string
   plate: string
   year: string
   status: string
-  mileage?: number | null
+  mileage: number | null
   driver_id: string | null
   current_branch_id: string | null
 }
+
+type LastChecklist = {
+  id: string
+  vehicle_model: string
+  vehicle_plate: string
+  km_atual: number | null
+  has_issue: boolean
+  observation: string | null
+  submitted_at: string
+}
+
+type LastFuel = {
+  id: string
+  vehicle_model: string
+  vehicle_plate: string
+  fuel_type: string
+  current_km: number | null
+  liters: number | null
+  total_amount: number | null
+  km_per_liter: number | null
+  cost_per_km: number | null
+  fuel_station: string | null
+  submitted_at: string
+}
+
+// =====================================================
+// PÁGINA
+// =====================================================
 
 export default function DriverPage() {
   const supabase = useMemo(
@@ -105,88 +86,167 @@ export default function DriverPage() {
     []
   )
 
-  const router = useRouter()
-
-  const [photos, setPhotos] = useState<File[]>([])
-  const [photoPreviews, setPhotoPreviews] =
-    useState<string[]>([])
-
-  const [uploading, setUploading] = useState(false)
-  const [successMsg, setSuccessMsg] = useState('')
-  const [errorMsg, setErrorMsg] = useState('')
+  const [profile, setProfile] =
+    useState<DriverProfile | null>(
+      null
+    )
 
   const [vehicle, setVehicle] =
-    useState<VehicleData | null>(null)
+    useState<VehicleData | null>(
+      null
+    )
 
-  const [loadingVehicle, setLoadingVehicle] =
+  const [
+    lastChecklist,
+    setLastChecklist,
+  ] =
+    useState<LastChecklist | null>(
+      null
+    )
+
+  const [
+    lastFuel,
+    setLastFuel,
+  ] =
+    useState<LastFuel | null>(
+      null
+    )
+
+  const [loading, setLoading] =
     useState(true)
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    setValue,
-    control,
-    formState: {
-      errors,
-      isValid,
-    },
-  } = useForm<ChecklistFormData>({
-    resolver: zodResolver(checklistSchema),
-    mode: 'onChange',
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] =
+    useState('')
 
-    defaultValues: {
-      vehiclePlate: '',
-      kmAtual: '',
-      observacoes: '',
-    },
-  })
+  // =====================================================
+  // CARREGAR DASHBOARD
+  // =====================================================
 
-  const selectedItems = useWatch({
-    control,
-    name: 'items',
-  })
-
-  useEffect(() => {
-    async function fetchVehicle() {
-      setLoadingVehicle(true)
+  const loadDashboard =
+    useCallback(async () => {
+      setLoading(true)
+      setErrorMessage('')
 
       try {
+        // ===============================================
+        // USUÁRIO
+        // ===============================================
+
         const {
           data: { user },
           error: userError,
-        } = await supabase.auth.getUser()
+        } =
+          await supabase.auth.getUser()
 
-        if (userError || !user) {
-          return
+        if (
+          userError ||
+          !user
+        ) {
+          throw new Error(
+            'Não foi possível identificar o motorista.'
+          )
         }
 
-        let vehicleData: VehicleData | null = null
+        // ===============================================
+        // PERFIL
+        // ===============================================
 
-        // 1. Busca pela atribuição oficial //
-         const {
-          data: assignment,
-          error: assignmentError,
+        const {
+          data: profileData,
+          error: profileError,
         } = await supabase
-          .from('driver_vehicle_assignments')
-          .select('vehicle_id')
-          .eq('driver_id', user.id)
-          .is('ended_at', null)
+          .from('profiles')
+          .select(`
+            id,
+            full_name,
+            email,
+            branch_id,
+            active
+          `)
+          .eq(
+            'id',
+            user.id
+          )
           .maybeSingle()
 
-        if (assignmentError) {
+        if (profileError) {
+          throw profileError
+        }
+
+        if (!profileData) {
+          throw new Error(
+            'Perfil do motorista não encontrado.'
+          )
+        }
+
+        const driverProfile =
+          profileData as DriverProfile
+
+        if (
+          !driverProfile.active
+        ) {
+          throw new Error(
+            'Seu usuário está inativo.'
+          )
+        }
+
+        setProfile(
+          driverProfile
+        )
+
+        // ===============================================
+        // VEÍCULO ATRIBUÍDO
+        // ===============================================
+
+        let vehicleData:
+          | VehicleData
+          | null = null
+
+        // 1. Estrutura oficial de atribuição.
+
+        const {
+          data: assignment,
+          error:
+            assignmentError,
+        } = await supabase
+          .from(
+            'driver_vehicle_assignments'
+          )
+          .select(
+            'vehicle_id'
+          )
+          .eq(
+            'driver_id',
+            user.id
+          )
+          .is(
+            'ended_at',
+            null
+          )
+          .maybeSingle()
+
+        if (
+          assignmentError
+        ) {
           console.error(
             'Erro ao buscar atribuição:',
             assignmentError
           )
         }
 
-        if (assignment?.vehicle_id) {
+        if (
+          assignment?.vehicle_id
+        ) {
           const {
             data,
             error,
           } = await supabase
-            .from('vehicles')
+            .from(
+              'vehicles'
+            )
             .select(`
               id,
               model,
@@ -197,26 +257,37 @@ export default function DriverPage() {
               driver_id,
               current_branch_id
             `)
-            .eq('id', assignment.vehicle_id)
+            .eq(
+              'id',
+              assignment.vehicle_id
+            )
             .maybeSingle()
 
           if (error) {
             console.error(
-              'Erro ao buscar veículo:',
+              'Erro ao buscar veículo atribuído:',
               error
             )
           } else if (data) {
-            vehicleData = data as VehicleData
+            vehicleData =
+              data as VehicleData
           }
         }
 
-        // 2. Fallback por driver_id
-        if (!vehicleData) {
+        // ===============================================
+        // FALLBACK DRIVER_ID
+        // ===============================================
+
+        if (
+          !vehicleData
+        ) {
           const {
             data,
             error,
           } = await supabase
-            .from('vehicles')
+            .from(
+              'vehicles'
+            )
             .select(`
               id,
               model,
@@ -227,26 +298,38 @@ export default function DriverPage() {
               driver_id,
               current_branch_id
             `)
-            .eq('driver_id', user.id)
+            .eq(
+              'driver_id',
+              user.id
+            )
             .maybeSingle()
 
           if (error) {
             console.error(
-              'Erro ao buscar veículo por driver_id:',
+              'Erro no fallback por driver_id:',
               error
             )
           } else if (data) {
-            vehicleData = data as VehicleData
+            vehicleData =
+              data as VehicleData
           }
         }
 
-        // 3. Compatibilidade com registros antigos
-        if (!vehicleData && user.email) {
+        // ===============================================
+        // FALLBACK LEGADO POR EMAIL
+        // ===============================================
+
+        if (
+          !vehicleData &&
+          user.email
+        ) {
           const {
             data,
             error,
           } = await supabase
-            .from('vehicles')
+            .from(
+              'vehicles'
+            )
             .select(`
               id,
               model,
@@ -257,732 +340,1103 @@ export default function DriverPage() {
               driver_id,
               current_branch_id
             `)
-            .eq('driver_email', user.email)
+            .eq(
+              'driver_email',
+              user.email
+            )
             .maybeSingle()
 
           if (error) {
             console.error(
-              'Erro ao buscar veículo por e-mail:',
+              'Erro no fallback por e-mail:',
               error
             )
           } else if (data) {
-            vehicleData = data as VehicleData
+            vehicleData =
+              data as VehicleData
           }
         }
 
-        if (vehicleData) {
-          setVehicle(vehicleData)
+        setVehicle(
+          vehicleData
+        )
 
-          setValue(
-            'vehiclePlate',
-            vehicleData.plate,
-            {
-              shouldValidate: true,
-            }
+        // ===============================================
+        // ÚLTIMO CHECKLIST + ABASTECIMENTO
+        // ===============================================
+
+        if (
+          vehicleData
+        ) {
+          const [
+            checklistResponse,
+            fuelResponse,
+          ] =
+            await Promise.all([
+              supabase
+                .from(
+                  'driver_checklists'
+                )
+                .select(`
+                  id,
+                  vehicle_model,
+                  vehicle_plate,
+                  km_atual,
+                  has_issue,
+                  observation,
+                  submitted_at
+                `)
+                .eq(
+                  'user_id',
+                  user.id
+                )
+                .eq(
+                  'vehicle_id',
+                  vehicleData.id
+                )
+                .order(
+                  'submitted_at',
+                  {
+                    ascending:
+                      false,
+                  }
+                )
+                .limit(1)
+                .maybeSingle(),
+
+              supabase
+                .from(
+                  'fuel_records'
+                )
+                .select(`
+                  id,
+                  vehicle_model,
+                  vehicle_plate,
+                  fuel_type,
+                  current_km,
+                  liters,
+                  total_amount,
+                  km_per_liter,
+                  cost_per_km,
+                  fuel_station,
+                  submitted_at
+                `)
+                .eq(
+                  'user_id',
+                  user.id
+                )
+                .eq(
+                  'vehicle_id',
+                  vehicleData.id
+                )
+                .order(
+                  'submitted_at',
+                  {
+                    ascending:
+                      false,
+                  }
+                )
+                .limit(1)
+                .maybeSingle(),
+            ])
+
+          if (
+            checklistResponse.error
+          ) {
+            console.error(
+              'Erro ao buscar último checklist:',
+              checklistResponse.error
+            )
+          } else {
+            setLastChecklist(
+              checklistResponse.data as
+                | LastChecklist
+                | null
+            )
+          }
+
+          if (
+            fuelResponse.error
+          ) {
+            console.error(
+              'Erro ao buscar último abastecimento:',
+              fuelResponse.error
+            )
+          } else {
+            setLastFuel(
+              fuelResponse.data as
+                | LastFuel
+                | null
+            )
+          }
+        } else {
+          setLastChecklist(
+            null
           )
 
-          if (vehicleData.mileage != null) {
-            setValue(
-              'kmAtual',
-              String(vehicleData.mileage),
-              {
-                shouldValidate: true,
-              }
-            )
-          }
+          setLastFuel(
+            null
+          )
         }
       } catch (error) {
         console.error(
-          'Falha ao carregar veículo:',
+          'Erro ao carregar painel do motorista:',
           error
         )
+
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : 'Não foi possível carregar seu painel.'
+        )
       } finally {
-        setLoadingVehicle(false)
+        setLoading(false)
       }
-    }
+    }, [supabase])
 
-    void fetchVehicle()
-  }, [setValue, supabase])
+  useEffect(() => {
+    void loadDashboard()
+  }, [loadDashboard])
 
-  function handlePhotoSelect(
-    event: React.ChangeEvent<HTMLInputElement>
-  ) {
-    if (
-      !event.target.files ||
-      event.target.files.length === 0
-    ) {
-      return
-    }
+  // =====================================================
+  // LOADING
+  // =====================================================
 
-    const selectedFiles =
-      Array.from(event.target.files)
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="flex min-h-[65vh] items-center justify-center">
 
-    if (
-      photos.length + selectedFiles.length > 5
-    ) {
-      alert(
-        'Você pode anexar no máximo 5 fotos por inspeção.'
-      )
+          <div className="text-center">
 
-      return
-    }
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-400" />
 
-    setPhotos((current) => [
-      ...current,
-      ...selectedFiles,
-    ])
+            <p className="mt-4 text-sm text-zinc-500">
+              Carregando seu painel...
+            </p>
 
-    const previews = selectedFiles.map(
-      (file) => URL.createObjectURL(file)
-    )
+          </div>
 
-    setPhotoPreviews((current) => [
-      ...current,
-      ...previews,
-    ])
-  }
-
-  function removePhoto(index: number) {
-    const preview = photoPreviews[index]
-
-    if (preview) {
-      URL.revokeObjectURL(preview)
-    }
-
-    setPhotos((current) =>
-      current.filter(
-        (_, itemIndex) => itemIndex !== index
-      )
-    )
-
-    setPhotoPreviews((current) =>
-      current.filter(
-        (_, itemIndex) => itemIndex !== index
-      )
+        </div>
+      </AppShell>
     )
   }
 
-  async function handleLogout() {
-    await supabase.auth.signOut()
+  // =====================================================
+  // ERRO
+  // =====================================================
 
-    router.push('/login')
-    router.refresh()
+  if (errorMessage) {
+    return (
+      <AppShell>
+        <div className="mx-auto max-w-3xl">
+
+          <section className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6">
+
+            <div className="flex items-start gap-3">
+
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
+
+              <div>
+
+                <h1 className="font-semibold text-white">
+                  Não foi possível carregar seu painel
+                </h1>
+
+                <p className="mt-2 text-sm text-red-300">
+                  {errorMessage}
+                </p>
+
+              </div>
+
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                void loadDashboard()
+              }
+              className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 text-sm font-semibold text-red-300 transition hover:bg-red-500/20"
+            >
+              <RefreshCw className="h-4 w-4" />
+
+              Tentar novamente
+            </button>
+
+          </section>
+
+        </div>
+      </AppShell>
+    )
   }
 
-  async function onSubmit(
-    data: ChecklistFormData
-  ) {
-    setUploading(true)
-    setErrorMsg('')
-    setSuccessMsg('')
+  // =====================================================
+  // UI
+  // =====================================================
 
-    try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
+  return (
+    <AppShell>
+      <div className="mx-auto w-full max-w-6xl space-y-6 sm:space-y-8">
 
-      if (userError || !user) {
-        throw new Error(
-          'Usuário não autenticado.'
-        )
-      }
+        {/* =================================================
+            CABEÇALHO
+        ================================================= */}
 
-      if (!vehicle) {
-        throw new Error(
-          'Nenhum veículo está atribuído ao motorista.'
-        )
-      }
+        <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
 
-      if (!vehicle.driver_id) {
-        throw new Error(
-          'O veículo não possui motorista vinculado.'
-        )
-      }
+          <div>
 
-      if (!vehicle.current_branch_id) {
-        throw new Error(
-          'O veículo não possui uma base vinculada.'
-        )
-      }
+            <p className="text-sm font-semibold text-blue-400">
+              Painel do motorista
+            </p>
 
-      // =====================================================
-      // VALIDAÇÃO DE QUILOMETRAGEM
-      // =====================================================
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">
+              Olá
+              {profile?.full_name
+                ? `, ${getFirstName(
+                    profile.full_name
+                  )}`
+                : ''}
+            </h1>
 
-      const currentKm = Number(data.kmAtual)
-      const previousKm = Number(vehicle.mileage ?? 0)
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+              Consulte seu veículo,
+              checklist e abastecimentos
+              em um único lugar.
+            </p>
 
-      if (
-        !Number.isFinite(currentKm) ||
-        currentKm <= 0
-      ) {
-        throw new Error(
-          'Informe uma quilometragem válida.'
-        )
-      }
+          </div>
 
-      if (!Number.isInteger(currentKm)) {
-        throw new Error(
-          'A quilometragem deve ser informada sem casas decimais.'
-        )
-      }
-
-      if (
-        previousKm > 0 &&
-        currentKm < previousKm
-      ) {
-        throw new Error(
-          `O KM informado (${currentKm.toLocaleString(
-            'pt-BR'
-          )}) não pode ser menor que o último KM registrado (${previousKm.toLocaleString(
-            'pt-BR'
-          )}).`
-        )
-      }
-
-      const kmDifference =
-        currentKm - previousKm
-
-      // Proteção contra erro de digitação
-      if (
-        previousKm > 0 &&
-        kmDifference > 2000
-      ) {
-        setErrorMsg(
-          `O KM informado está ${kmDifference.toLocaleString(
-            'pt-BR'
-          )} km acima do último registro. Confira o hodômetro antes de enviar o checklist.`
-        )
-        return
-      }
-
-      // =====================================================
-      // UPLOAD DAS FOTOS
-      // =====================================================
-
-      const uploadedPhotoUrls: string[] = []
-
-      for (const photo of photos) {
-        const fileExt =
-          photo.name.split('.').pop() ?? 'jpg'
-
-        const uniqueId =
-          crypto.randomUUID()
-
-        const fileName =
-          `${user.id}/${uniqueId}.${fileExt}`
-
-        const {
-          error: uploadError,
-        } = await supabase.storage
-          .from('checklist-photos')
-          .upload(
-            fileName,
-            photo,
-            {
-              cacheControl: '3600',
-              upsert: false,
+          <button
+            type="button"
+            onClick={() =>
+              void loadDashboard()
             }
-          )
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 text-sm font-semibold text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
+          >
+            <RefreshCw className="h-4 w-4" />
 
-        if (uploadError) {
-          throw new Error(
-            `Falha no upload da foto: ${uploadError.message}`
-          )
-        }
+            Atualizar
+          </button>
 
-        const {
-          data: publicUrlData,
-        } = supabase.storage
-          .from('checklist-photos')
-          .getPublicUrl(fileName)
+        </section>
 
-        uploadedPhotoUrls.push(
-          publicUrlData.publicUrl
-        )
-      }
+        {/* =================================================
+            MOTORISTA
+        ================================================= */}
 
-      // =====================================================
-      // ITENS DO CHECKLIST
-      // =====================================================
+        {profile && (
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 sm:p-6">
 
-      const formattedItems =
-        INSPECTION_ITEMS.map((item) => {
-          const value =
-            data.items[item.id]
+            <div className="flex items-center gap-4">
 
-          return {
-            name: item.label,
-            value,
-            ok: value === 'SIM',
-          }
-        })
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-400">
 
-      const itensComDefeito =
-        formattedItems
-          .filter((item) => !item.ok)
-          .map((item) => item.name)
+                <UserRound className="h-6 w-6" />
 
-      const hasIssue =
-        itensComDefeito.length > 0
+              </div>
 
-      let observacaoFinal =
-        data.observacoes?.trim() ?? ''
+              <div className="min-w-0">
 
-      if (hasIssue) {
-        observacaoFinal =
-          `Itens incorretos/ausentes: ${itensComDefeito.join(
-            ', '
-          )}. KM: ${currentKm}. ${observacaoFinal}`.trim()
-      } else {
-        observacaoFinal =
-          `KM Atual registrado: ${currentKm}. ${observacaoFinal}`.trim()
-      }
+                <p className="font-semibold text-white">
+                  {profile.full_name}
+                </p>
 
-      const today =
-        new Date()
-          .toISOString()
-          .slice(0, 10)
+                <p className="mt-1 truncate text-sm text-zinc-500">
+                  {profile.email}
+                </p>
 
-      // =====================================================
-      // SALVAR CHECKLIST
-      // =====================================================
+              </div>
 
-      const {
-        error: insertError,
-      } = await supabase
-        .from('driver_checklists')
-        .insert({
-          id: crypto.randomUUID(),
+            </div>
 
-          user_id: user.id,
-          driver_id: vehicle.driver_id,
-          vehicle_id: vehicle.id,
-          branch_id:
-            vehicle.current_branch_id,
+          </section>
+        )}
 
-          driver:
-            user.user_metadata?.full_name ||
-            user.email?.split('@')[0] ||
-            'Motorista',
+        {/* =================================================
+            VEÍCULO
+        ================================================= */}
 
-          driver_email:
-            user.email ?? '',
+        {vehicle ? (
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 sm:p-6">
 
-          vehicle_model:
-            vehicle.model,
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
 
-          vehicle_plate:
-            vehicle.plate.toUpperCase(),
+              <div className="flex items-center gap-4">
 
-          km_atual:
-            currentKm,
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-blue-500/20 bg-blue-500/10 text-blue-400">
 
-          checklist_date:
-            today,
+                  <Car className="h-7 w-7" />
 
-          items:
-            formattedItems,
+                </div>
 
-          has_issue:
-            hasIssue,
+                <div>
 
-          observation:
-            observacaoFinal,
+                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    Veículo atual
+                  </p>
 
-          photos:
-            uploadedPhotoUrls,
-        })
+                  <h2 className="mt-1 text-xl font-bold text-white">
+                    {vehicle.model}
+                  </h2>
 
-      if (insertError) {
-        throw insertError
-      }
+                  <p className="mt-1 text-sm text-zinc-500">
+                    {vehicle.plate}
+                    {' • '}
+                    {vehicle.year}
+                  </p>
 
-      // =====================================================
-      // SINCRONIZAÇÃO PELO BANCO
-      // =====================================================
-      //
-      // O trigger do Supabase atualiza automaticamente:
-      // - vehicles.mileage
-      // - vehicles.status
-      // - vehicles.issues
-      // - maintenance_records quando houver ocorrência
-      //
-      // Aqui o motorista grava apenas o checklist.
+                </div>
 
-      // =====================================================
-      // SUCESSO
-      // =====================================================
+              </div>
 
-      setSuccessMsg(
-        hasIssue
-          ? 'Checklist enviado. Uma ocorrência de manutenção foi registrada.'
-          : 'Checklist enviado com sucesso! Boa viagem.'
-      )
+              <div className="flex flex-wrap items-center gap-3">
 
-      photoPreviews.forEach((url) =>
-        URL.revokeObjectURL(url)
-      )
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
 
-      setPhotos([])
-      setPhotoPreviews([])
+                  <p className="text-xs text-zinc-500">
+                    Quilometragem
+                  </p>
 
-      setVehicle((current) =>
-        current
-          ? {
-              ...current,
-              mileage: currentKm,
-              status: hasIssue
-                ? 'Manutenção'
-                : current.status,
-            }
-          : null
-      )
+                  <p className="mt-1 font-semibold text-zinc-200">
+                    {Number(
+                      vehicle.mileage ??
+                        0
+                    ).toLocaleString(
+                      'pt-BR'
+                    )}{' '}
+                    km
+                  </p>
 
-      reset({
-        vehiclePlate: vehicle.plate,
-        kmAtual: String(currentKm),
-        observacoes: '',
-      })
-    } catch (error: unknown) {
-      console.error(
-        'Erro ao enviar checklist:',
-        error
-      )
+                </div>
 
-      setErrorMsg(
-        error instanceof Error
-          ? error.message
-          : 'Erro ao enviar checklist.'
-      )
-    } finally {
-      setUploading(false)
-    }
+                <VehicleStatus
+                  status={
+                    vehicle.status
+                  }
+                />
+
+              </div>
+
+            </div>
+
+          </section>
+        ) : (
+          <section className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 sm:p-6">
+
+            <div className="flex items-start gap-3">
+
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+
+              <div>
+
+                <h2 className="font-semibold text-amber-300">
+                  Nenhum veículo atribuído
+                </h2>
+
+                <p className="mt-1 text-sm leading-6 text-zinc-400">
+                  Entre em contato com o gestor da sua base para receber um veículo.
+                </p>
+
+              </div>
+
+            </div>
+
+          </section>
+        )}
+
+        {/* =================================================
+            AÇÕES RÁPIDAS
+        ================================================= */}
+
+        <section>
+
+          <div className="mb-4">
+
+            <h2 className="text-lg font-bold text-white">
+              Ações rápidas
+            </h2>
+
+            <p className="mt-1 text-sm text-zinc-500">
+              Registre as atividades diárias do veículo.
+            </p>
+
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+
+            <QuickActionCard
+              href="/driver/checklist"
+              icon={
+                ClipboardCheck
+              }
+              title="Fazer checklist"
+              description="Realize a inspeção diária antes de iniciar a operação."
+              disabled={
+                !vehicle
+              }
+            />
+
+            <QuickActionCard
+              href="/driver/fuel"
+              icon={Fuel}
+              title="Registrar abastecimento"
+              description="Informe combustível, litros, valor e quilometragem."
+              disabled={
+                !vehicle
+              }
+            />
+
+          </div>
+
+        </section>
+
+        {/* =================================================
+            ÚLTIMAS ATIVIDADES
+        ================================================= */}
+
+        <section>
+
+          <div className="mb-4 flex items-center gap-3">
+
+            <History className="h-5 w-5 text-blue-400" />
+
+            <div>
+
+              <h2 className="text-lg font-bold text-white">
+                Últimas atividades
+              </h2>
+
+              <p className="text-xs text-zinc-500">
+                Registros mais recentes deste veículo.
+              </p>
+
+            </div>
+
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+
+            {/* CHECKLIST */}
+
+            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
+
+              <div className="flex items-center justify-between gap-3">
+
+                <div className="flex items-center gap-3">
+
+                  <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-2.5 text-blue-400">
+
+                    <ClipboardCheck className="h-5 w-5" />
+
+                  </div>
+
+                  <div>
+
+                    <h3 className="font-semibold text-white">
+                      Último checklist
+                    </h3>
+
+                    <p className="text-xs text-zinc-500">
+                      Inspeção veicular
+                    </p>
+
+                  </div>
+
+                </div>
+
+                <Link
+                  href="/driver/checklist"
+                  className="text-xs font-semibold text-blue-400 transition hover:text-blue-300"
+                >
+                  Novo
+                </Link>
+
+              </div>
+
+              {lastChecklist ? (
+                <div className="mt-5 space-y-4">
+
+                  <div className="grid grid-cols-2 gap-3">
+
+                    <SmallMetric
+                      label="Data"
+                      value={formatDate(
+                        lastChecklist.submitted_at
+                      )}
+                    />
+
+                    <SmallMetric
+                      label="KM"
+                      value={
+                        lastChecklist.km_atual !=
+                        null
+                          ? `${Number(
+                              lastChecklist.km_atual
+                            ).toLocaleString(
+                              'pt-BR'
+                            )} km`
+                          : '--'
+                      }
+                    />
+
+                  </div>
+
+                  <div
+                    className={[
+                      'flex items-start gap-3 rounded-xl border p-4',
+
+                      lastChecklist.has_issue
+                        ? 'border-amber-500/20 bg-amber-500/10'
+                        : 'border-emerald-500/20 bg-emerald-500/10',
+                    ].join(' ')}
+                  >
+
+                    {lastChecklist.has_issue ? (
+                      <Wrench className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+                    ) : (
+                      <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+                    )}
+
+                    <div>
+
+                      <p
+                        className={
+                          lastChecklist.has_issue
+                            ? 'text-sm font-semibold text-amber-300'
+                            : 'text-sm font-semibold text-emerald-300'
+                        }
+                      >
+                        {lastChecklist.has_issue
+                          ? 'Ocorrência encontrada'
+                          : 'Veículo aprovado'}
+                      </p>
+
+                      {lastChecklist.observation && (
+                        <p className="mt-1 line-clamp-3 text-xs leading-5 text-zinc-400">
+                          {
+                            lastChecklist.observation
+                          }
+                        </p>
+                      )}
+
+                    </div>
+
+                  </div>
+
+                </div>
+              ) : (
+                <EmptyActivity
+                  text="Nenhum checklist registrado para este veículo."
+                />
+              )}
+
+            </section>
+
+            {/* ABASTECIMENTO */}
+
+            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
+
+              <div className="flex items-center justify-between gap-3">
+
+                <div className="flex items-center gap-3">
+
+                  <div className="rounded-xl border border-violet-500/20 bg-violet-500/10 p-2.5 text-violet-400">
+
+                    <Fuel className="h-5 w-5" />
+
+                  </div>
+
+                  <div>
+
+                    <h3 className="font-semibold text-white">
+                      Último abastecimento
+                    </h3>
+
+                    <p className="text-xs text-zinc-500">
+                      Consumo do veículo
+                    </p>
+
+                  </div>
+
+                </div>
+
+                <Link
+                  href="/driver/fuel"
+                  className="text-xs font-semibold text-blue-400 transition hover:text-blue-300"
+                >
+                  Novo
+                </Link>
+
+              </div>
+
+              {lastFuel ? (
+                <div className="mt-5">
+
+                  <div className="grid grid-cols-2 gap-3">
+
+                    <SmallMetric
+                      label="Combustível"
+                      value={
+                        lastFuel.fuel_type
+                      }
+                    />
+
+                    <SmallMetric
+                      label="Data"
+                      value={formatDate(
+                        lastFuel.submitted_at
+                      )}
+                    />
+
+                    <SmallMetric
+                      label="Litros"
+                      value={
+                        lastFuel.liters !=
+                        null
+                          ? `${formatNumber(
+                              Number(
+                                lastFuel.liters
+                              ),
+                              2
+                            )} L`
+                          : '--'
+                      }
+                    />
+
+                    <SmallMetric
+                      label="Valor"
+                      value={
+                        lastFuel.total_amount !=
+                        null
+                          ? formatCurrency(
+                              Number(
+                                lastFuel.total_amount
+                              )
+                            )
+                          : '--'
+                      }
+                    />
+
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+
+                    <SmallMetric
+                      label="Consumo"
+                      value={
+                        Number(
+                          lastFuel.km_per_liter ??
+                            0
+                        ) > 0
+                          ? `${Number(
+                              lastFuel.km_per_liter
+                            ).toFixed(
+                              2
+                            )} km/L`
+                          : '--'
+                      }
+                    />
+
+                    <SmallMetric
+                      label="Custo/km"
+                      value={
+                        Number(
+                          lastFuel.cost_per_km ??
+                            0
+                        ) > 0
+                          ? formatCurrency(
+                              Number(
+                                lastFuel.cost_per_km
+                              )
+                            )
+                          : '--'
+                      }
+                    />
+
+                  </div>
+
+                  {lastFuel.fuel_station && (
+                    <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+
+                      <p className="text-xs text-zinc-500">
+                        Posto
+                      </p>
+
+                      <p className="mt-1 text-sm font-medium text-zinc-300">
+                        {lastFuel.fuel_station}
+                      </p>
+
+                    </div>
+                  )}
+
+                </div>
+              ) : (
+                <EmptyActivity
+                  text="Nenhum abastecimento registrado para este veículo."
+                />
+              )}
+
+            </section>
+
+          </div>
+
+        </section>
+
+        {/* =================================================
+            RESUMO
+        ================================================= */}
+
+        {vehicle && (
+          <section className="grid gap-4 sm:grid-cols-3">
+
+            <DashboardMetric
+              icon={Gauge}
+              label="KM atual"
+              value={`${Number(
+                vehicle.mileage ??
+                  0
+              ).toLocaleString(
+                'pt-BR'
+              )} km`}
+            />
+
+            <DashboardMetric
+              icon={
+                ClipboardCheck
+              }
+              label="Checklist"
+              value={
+                lastChecklist
+                  ? lastChecklist.has_issue
+                    ? 'Com ocorrência'
+                    : 'Aprovado'
+                  : 'Sem registro'
+              }
+            />
+
+            <DashboardMetric
+              icon={Route}
+              label="Status veículo"
+              value={
+                vehicle.status ||
+                'Ativo'
+              }
+            />
+
+          </section>
+        )}
+
+      </div>
+    </AppShell>
+  )
+}
+
+// =====================================================
+// AÇÃO RÁPIDA
+// =====================================================
+
+function QuickActionCard({
+  href,
+  icon: Icon,
+  title,
+  description,
+  disabled,
+}: {
+  href: string
+  icon: typeof Fuel
+  title: string
+  description: string
+  disabled?: boolean
+}) {
+  if (disabled) {
+    return (
+      <div className="cursor-not-allowed rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 opacity-50">
+
+        <div className="flex items-start gap-4">
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-zinc-500">
+
+            <Icon className="h-6 w-6" />
+
+          </div>
+
+          <div>
+
+            <h3 className="font-semibold text-zinc-300">
+              {title}
+            </h3>
+
+            <p className="mt-2 text-sm leading-6 text-zinc-500">
+              {description}
+            </p>
+
+          </div>
+
+        </div>
+
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-[#0d0f17] p-4 text-white md:p-8">
-      <div className="mx-auto w-full max-w-2xl">
+    <Link
+      href={href}
+      className="group rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 transition hover:border-blue-500/30 hover:bg-zinc-900"
+    >
 
-        {/* CABEÇALHO */}
+      <div className="flex items-start justify-between gap-4">
 
-        <div className="mb-6 flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+        <div className="flex items-start gap-4">
+
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-blue-400">
+
+            <Icon className="h-6 w-6" />
+
+          </div>
+
           <div>
-            <h1 className="flex items-center gap-2 text-lg font-bold text-white">
-              <CheckCircle2 className="h-5 w-5 text-blue-500" />
 
-              Inspeção Pré-Viagem
-            </h1>
+            <h3 className="font-semibold text-white">
+              {title}
+            </h3>
 
-            <p className="text-xs text-zinc-400">
-              Verificação de Segurança Veicular
+            <p className="mt-2 text-sm leading-6 text-zinc-500">
+              {description}
             </p>
+
           </div>
 
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex items-center gap-1 rounded-xl bg-zinc-800 p-2 text-xs text-zinc-300 transition hover:bg-zinc-700"
-          >
-            <LogOut className="h-4 w-4" />
-
-            Sair
-          </button>
         </div>
 
-        {/* VEÍCULO */}
+        <ChevronRight className="mt-2 h-5 w-5 shrink-0 text-zinc-600 transition group-hover:translate-x-1 group-hover:text-blue-400" />
 
-        {loadingVehicle ? (
-          <div className="mb-4 flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-            <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+      </div>
 
-            <span className="text-sm text-zinc-400">
-              Carregando dados do veículo...
-            </span>
-          </div>
-        ) : vehicle ? (
-          <div className="mb-4 rounded-xl border border-blue-500/20 bg-zinc-900 p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <Car className="h-5 w-5 shrink-0 text-blue-500" />
+    </Link>
+  )
+}
 
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                  <span className="font-semibold text-white">
-                    {vehicle.model}
-                  </span>
+// =====================================================
+// STATUS DO VEÍCULO
+// =====================================================
 
-                  <span className="text-zinc-600">
-                    |
-                  </span>
+function VehicleStatus({
+  status,
+}: {
+  status: string
+}) {
+  const maintenance =
+    status ===
+      'Manutenção' ||
+    status ===
+      'Maintenance'
 
-                  <span className="font-mono font-bold text-blue-400">
-                    {vehicle.plate}
-                  </span>
+  return (
+    <div
+      className={[
+        'rounded-xl border px-4 py-3',
 
-                  <span className="text-zinc-600">
-                    |
-                  </span>
+        maintenance
+          ? 'border-amber-500/20 bg-amber-500/10'
+          : 'border-emerald-500/20 bg-emerald-500/10',
+      ].join(' ')}
+    >
 
-                  <span className="text-zinc-400">
-                    {vehicle.year}
-                  </span>
-                </div>
-              </div>
+      <p
+        className={[
+          'text-xs',
 
-              <span
-                className={[
-                  'w-fit rounded-full border px-2.5 py-1 text-xs font-semibold',
-                  vehicle.status ===
-                  'Manutenção'
-                    ? 'border-amber-500/20 bg-amber-500/10 text-amber-400'
-                    : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400',
-                ].join(' ')}
-              >
-                {vehicle.status || 'Ativo'}
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-amber-400">
-            <AlertTriangle className="h-5 w-5 shrink-0" />
-
-            <span className="text-sm">
-              Nenhum veículo atribuído a você. Entre em contato com o gestor.
-            </span>
-          </div>
-        )}
-
-        {/* SUCESSO */}
-{successMsg && (
-  <div className="mb-6 flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm font-medium text-emerald-400">
-    <Check className="h-5 w-5 shrink-0" />
-    {successMsg}
-  </div>
-)}
-
-{/* ERRO */}
-{errorMsg && (
-  <div className="mb-6 flex items-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-medium text-red-400">
-    <AlertTriangle className="h-5 w-5 shrink-0" />
-    {errorMsg}
-  </div>
-)}{/* FORMULÁRIO */}
-<form
-  onSubmit={handleSubmit(onSubmit)}
-  className="space-y-6"
->
-  {/* PLACA E KM */}
-  <div className="grid grid-cols-1 gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-6 md:grid-cols-2">
-    <div className="space-y-1.5">
-      <label className="text-xs font-semibold uppercase text-zinc-400">
-        Placa do veículo *
-      </label>
-
-      <input
-        type="text"
-        readOnly
-        {...register('vehiclePlate')}
-        className="w-full rounded-xl border border-zinc-700 bg-zinc-800 p-3 uppercase text-white outline-none"
-      />
-
-      {errors.vehiclePlate && (
-        <p className="text-xs text-red-400">
-          {errors.vehiclePlate.message}
-        </p>
-      )}
-    </div>
-
-    <div className="space-y-1.5">
-      <label className="text-xs font-semibold uppercase text-zinc-400">
-        KM Atual *
-      </label>
-
-      {vehicle?.mileage != null && (
-        <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
-          <p className="text-xs text-zinc-400">
-            Último KM registrado
-          </p>
-
-          <p className="mt-0.5 text-sm font-bold text-blue-400">
-            {Number(vehicle.mileage).toLocaleString('pt-BR')} km
-          </p>
-        </div>
-      )}
-
-      <input
-        type="number"
-        min={vehicle?.mileage ?? 0}
-        step="1"
-        inputMode="numeric"
-        placeholder="Ex: 120600"
-        {...register('kmAtual')}
-        className="w-full rounded-xl border border-zinc-700 bg-zinc-800 p-3 text-white outline-none transition placeholder:text-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-      />
-
-      <p className="text-[11px] leading-4 text-zinc-500">
-        Informe a quilometragem atual exibida no painel do veículo.
+          maintenance
+            ? 'text-amber-400'
+            : 'text-emerald-400',
+        ].join(' ')}
+      >
+        Status
       </p>
 
-      {errors.kmAtual && (
-        <p className="text-xs font-medium text-red-400">
-          {errors.kmAtual.message}
+      <p
+        className={[
+          'mt-1 font-semibold',
+
+          maintenance
+            ? 'text-amber-300'
+            : 'text-emerald-300',
+        ].join(' ')}
+      >
+        {status ||
+          'Ativo'}
+      </p>
+
+    </div>
+  )
+}
+
+// =====================================================
+// MÉTRICA PEQUENA
+// =====================================================
+
+function SmallMetric({
+  label,
+  value,
+}: {
+  label: string
+  value: string
+}) {
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+
+      <p className="text-xs text-zinc-500">
+        {label}
+      </p>
+
+      <p className="mt-1 text-sm font-semibold text-zinc-200">
+        {value}
+      </p>
+
+    </div>
+  )
+}
+
+// =====================================================
+// MÉTRICA DO DASHBOARD
+// =====================================================
+
+function DashboardMetric({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Gauge
+  label: string
+  value: string
+}) {
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
+
+      <div className="flex items-center gap-2 text-zinc-500">
+
+        <Icon className="h-4 w-4" />
+
+        <p className="text-xs">
+          {label}
         </p>
-      )}
-    </div>
-  </div>
 
-  {/* ITENS */}
-  <div className="space-y-3">
-    <h2 className="px-1 text-xs font-bold uppercase tracking-wider text-zinc-400">
-      Itens de inspeção
-    </h2>
+      </div>
 
-    <div className="space-y-2.5">
-      {INSPECTION_ITEMS.map((item) => {
-        const fieldName =
-          `items.${item.id}` as FieldPath<ChecklistFormData>
-
-        const selectedValue =
-          selectedItems?.[item.id]
-
-        return (
-          <div
-            key={item.id}
-            className="flex flex-col gap-3 rounded-2xl border border-zinc-800/80 bg-[#141824] p-4 transition hover:border-zinc-700 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <span className="text-sm font-bold tracking-wide text-zinc-200">
-              {item.label}
-            </span>
-
-            <div className="flex items-center gap-2">
-              <label
-                className={[
-                  'cursor-pointer rounded-xl border px-4 py-1.5 text-xs font-bold transition',
-                  selectedValue === 'SIM'
-                    ? 'border-blue-500 bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                    : 'border-zinc-700 bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200',
-                ].join(' ')}
-              >
-                <input
-                  type="radio"
-                  value="SIM"
-                  {...register(fieldName)}
-                  className="hidden"
-                />
-
-                SIM
-              </label>
-
-              <label
-                className={[
-                  'cursor-pointer rounded-xl border px-4 py-1.5 text-xs font-bold transition',
-                  selectedValue === 'NÃO'
-                    ? 'border-red-500 bg-red-600/90 text-white shadow-md shadow-red-600/20'
-                    : 'border-zinc-700 bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200',
-                ].join(' ')}
-              >
-                <input
-                  type="radio"
-                  value="NÃO"
-                  {...register(fieldName)}
-                  className="hidden"
-                />NÃO
-              </label>
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  </div>
-
-  {/* FOTOS */}
-  <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-6">
-    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400">
-      Fotos do veículo / avarias (até 5)
-    </label>
-
-    <div className="grid grid-cols-3 gap-3 md:grid-cols-5">
-      {photoPreviews.map((url, index) => (
-        <div
-          key={url}
-          className="relative aspect-square overflow-hidden rounded-xl border border-zinc-700"
-        >
-          <Image
-            src={url}
-            alt={`Prévia ${index + 1}`}
-            fill
-            sizes="(max-width: 768px) 33vw, 20vw"
-            className="object-cover"
-            unoptimized
-          />
-
-          <button
-            type="button"
-            onClick={() => removePhoto(index)}
-            className="absolute right-1 top-1 z-10 rounded-full bg-red-600/80 p-1 text-white transition hover:bg-red-600"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      ))}
-
-      {photos.length < 5 && (
-        <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-700 bg-zinc-800/40 p-2 text-center transition hover:border-blue-500">
-          <Camera className="mb-1 h-6 w-6 text-zinc-400" />
-
-          <span className="text-[11px] font-medium text-zinc-400">
-            Tirar foto
-          </span>
-
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            multiple
-            onChange={handlePhotoSelect}
-            className="hidden"
-          />
-        </label>
-      )}
-    </div>
-  </div>
-
-  {/* OBSERVAÇÕES */}
-  <div className="space-y-1.5 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-6">
-    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400">
-      Observações ou avarias
-    </label>
-
-    <textarea
-      rows={3}
-      placeholder="Descreva arranhões, barulhos ou itens com defeito..."
-      {...register('observacoes')}
-      className="w-full resize-none rounded-xl border border-zinc-700 bg-zinc-800/60 p-3 text-white outline-none placeholder:text-zinc-500 focus:border-blue-500"
-    />
-  </div>
-
-  {/* BOTÃO */}
-  <button
-    type="submit"
-    disabled={!isValid || uploading || !vehicle}
-    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 py-4 font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-  >
-    {uploading ? (
-      <>
-        <Loader2 className="h-5 w-5 animate-spin" />
-        Enviando checklist...
-      </>
-    ) : (
-      <>
-        <CheckCircle2 className="h-5 w-5" />
-        Enviar checklist
-      </>
-    )}
-  </button>
-</form>
+      <p className="mt-3 font-bold text-white">
+        {value}
+      </p>
 
     </div>
-  </div>
-)
+  )
+}
+
+// =====================================================
+// ESTADO VAZIO
+// =====================================================
+
+function EmptyActivity({
+  text,
+}: {
+  text: string
+}) {
+  return (
+    <div className="mt-5 rounded-xl border border-dashed border-zinc-800 bg-zinc-950/30 p-5 text-center">
+
+      <CalendarDays className="mx-auto h-6 w-6 text-zinc-700" />
+
+      <p className="mt-2 text-sm text-zinc-500">
+        {text}
+      </p>
+
+    </div>
+  )
+}
+
+// =====================================================
+// FORMATAÇÃO
+// =====================================================
+
+function getFirstName(
+  fullName: string
+) {
+  return (
+    fullName
+      .trim()
+      .split(/\s+/)[0] ||
+    'Motorista'
+  )
+}
+
+function formatCurrency(
+  value: number
+) {
+  return new Intl.NumberFormat(
+    'pt-BR',
+    {
+      style:
+        'currency',
+      currency:
+        'BRL',
+    }
+  ).format(
+    Number.isFinite(
+      value
+    )
+      ? value
+      : 0
+  )
+}
+
+function formatNumber(
+  value: number,
+  digits = 2
+) {
+  return new Intl.NumberFormat(
+    'pt-BR',
+    {
+      minimumFractionDigits:
+        digits,
+
+      maximumFractionDigits:
+        digits,
+    }
+  ).format(
+    Number.isFinite(
+      value
+    )
+      ? value
+      : 0
+  )
+}
+
+function formatDate(
+  value: string
+) {
+  const date =
+    new Date(
+      value
+    )
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return '--'
+  }
+
+  return new Intl.DateTimeFormat(
+    'pt-BR',
+    {
+      dateStyle:
+        'short',
+
+      timeStyle:
+        'short',
+    }
+  ).format(
+    date
+  )
 }

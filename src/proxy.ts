@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+
 import {
   NextResponse,
   type NextRequest,
@@ -9,7 +10,9 @@ import {
   normalizeRole,
 } from '@/lib/auth/roles'
 
-export async function proxy(request: NextRequest) {
+export async function proxy(
+  request: NextRequest
+) {
   let response = NextResponse.next({
     request,
   })
@@ -26,7 +29,10 @@ export async function proxy(request: NextRequest) {
         setAll(cookiesToSet, headers) {
           cookiesToSet.forEach(
             ({ name, value }) => {
-              request.cookies.set(name, value)
+              request.cookies.set(
+                name,
+                value
+              )
             }
           )
 
@@ -35,7 +41,11 @@ export async function proxy(request: NextRequest) {
           })
 
           cookiesToSet.forEach(
-            ({ name, value, options }) => {
+            ({
+              name,
+              value,
+              options,
+            }) => {
               response.cookies.set(
                 name,
                 value,
@@ -44,7 +54,9 @@ export async function proxy(request: NextRequest) {
             }
           )
 
-          Object.entries(headers ?? {}).forEach(
+          Object.entries(
+            headers ?? {}
+          ).forEach(
             ([key, value]) => {
               response.headers.set(
                 key,
@@ -217,8 +229,44 @@ export async function proxy(request: NextRequest) {
       )
     }
 
-    // Gestor de base precisa obrigatoriamente
-    // estar vinculado a uma base.
+    if (
+      isBranchManager &&
+      !profile.branch_id
+    ) {
+      await supabase.auth.signOut()
+
+      redirectUrl.pathname =
+        '/login'
+
+      redirectUrl.search =
+        '?error=branch_required'
+
+      return NextResponse.redirect(
+        redirectUrl
+      )
+    }
+  }
+
+  // =====================================================
+  // /maintenance
+  // admin, fleet_manager ou branch_manager
+  // =====================================================
+
+  if (
+    pathname.startsWith('/maintenance')
+  ) {
+    if (
+      !isGlobalManager &&
+      !isBranchManager
+    ) {
+      redirectUrl.pathname = home
+      redirectUrl.search = ''
+
+      return NextResponse.redirect(
+        redirectUrl
+      )
+    }
+
     if (
       isBranchManager &&
       !profile.branch_id
@@ -266,6 +314,7 @@ export const config = {
     '/auth/accept-invite',
     '/admin/:path*',
     '/manager/:path*',
+    '/maintenance/:path*',
     '/driver/:path*',
   ],
 }

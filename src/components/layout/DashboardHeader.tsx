@@ -1,7 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
+
 import { useRouter } from 'next/navigation'
+
 import {
   Bell,
   LogOut,
@@ -24,7 +30,9 @@ type HeaderProfile = {
   role: UserRole
 }
 
-function getRoleLabel(role: UserRole): string {
+function getRoleLabel(
+  role: UserRole
+): string {
   switch (role) {
     case 'admin':
       return 'Administrador'
@@ -47,7 +55,11 @@ export function DashboardHeader({
   onMenuClick,
 }: DashboardHeaderProps) {
   const router = useRouter()
-  const supabase = createClient()
+
+  const supabase = useMemo(
+    () => createClient(),
+    []
+  )
 
   const [profile, setProfile] =
     useState<HeaderProfile | null>(null)
@@ -59,41 +71,65 @@ export function DashboardHeader({
     let mounted = true
 
     async function loadUser() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      try {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser()
 
-      if (!user || !mounted) {
-        return
+        if (
+          userError ||
+          !user ||
+          !mounted
+        ) {
+          return
+        }
+
+        const {
+          data,
+          error: profileError,
+        } = await supabase
+          .from('profiles')
+          .select(
+            'full_name, email, role'
+          )
+          .eq('id', user.id)
+          .maybeSingle()
+
+        if (
+          profileError ||
+          !mounted
+        ) {
+          return
+        }
+
+        setProfile({
+          name:
+            data?.full_name ||
+            user.user_metadata
+              ?.full_name ||
+            user.email?.split('@')[0] ||
+            'Usuário',
+
+          email:
+            data?.email ||
+            user.email ||
+            '',
+
+          role:
+            normalizeRole(
+              data?.role
+            ),
+        })
+      } catch (error) {
+        console.error(
+          'Erro ao carregar usuário do cabeçalho:',
+          error
+        )
       }
-
-      const { data } = await supabase
-        .from('profiles')
-        .select('full_name, email, role')
-        .eq('id', user.id)
-        .maybeSingle()
-
-      if (!mounted) {
-        return
-      }
-
-      setProfile({
-        name:
-          data?.full_name ||
-          user.user_metadata?.full_name ||
-          user.email?.split('@')[0] ||
-          'Usuário',
-
-        email:
-          data?.email ||
-          user.email ||
-          '',
-
-        role: normalizeRole(data?.role),
-      })
     }
 
-    loadUser()
+    void loadUser()
 
     return () => {
       mounted = false
@@ -101,12 +137,20 @@ export function DashboardHeader({
   }, [supabase])
 
   async function handleSignOut() {
-    if (signingOut) return
+    if (signingOut) {
+      return
+    }
 
     try {
       setSigningOut(true)
 
-      await supabase.auth.signOut()
+      const {
+        error,
+      } = await supabase.auth.signOut()
+
+      if (error) {
+        throw error
+      }
 
       router.replace('/login')
       router.refresh()
@@ -124,8 +168,6 @@ export function DashboardHeader({
     <header className="sticky top-0 z-30 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur-xl">
       <div className="flex min-h-16 items-center gap-3 px-4 py-2 sm:px-6 lg:px-8">
 
-        {/* MENU MOBILE */}
-
         <button
           type="button"
           onClick={onMenuClick}
@@ -137,8 +179,6 @@ export function DashboardHeader({
             className="h-5 w-5"
           />
         </button>
-
-        {/* BUSCA */}
 
         <div className="relative hidden max-w-xl flex-1 md:block">
           <Search
@@ -156,14 +196,13 @@ export function DashboardHeader({
 
         <div className="flex-1 md:hidden" />
 
-        {/* AÇÕES */}
-
         <div className="flex items-center gap-2">
 
           <button
             type="button"
             aria-label="Notificações"
-            className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 transition hover:bg-zinc-800 hover:text-white">
+            className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
+          >
             <Bell
               aria-hidden="true"
               className="h-5 w-5"
@@ -175,9 +214,8 @@ export function DashboardHeader({
             />
           </button>
 
-          {/* USUÁRIO */}
-
           <div className="hidden min-w-0 items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 sm:flex">
+
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-400">
               <UserRound
                 aria-hidden="true"
@@ -187,18 +225,19 @@ export function DashboardHeader({
 
             <div className="min-w-0">
               <p className="max-w-40 truncate text-xs font-semibold text-zinc-200">
-                {profile?.name ?? 'Carregando...'}
+                {profile?.name ??
+                  'Carregando...'}
               </p>
 
               <p className="max-w-40 truncate text-[11px] text-zinc-500">
                 {profile
-                  ? getRoleLabel(profile.role)
+                  ? getRoleLabel(
+                      profile.role
+                    )
                   : 'FrotaPro'}
               </p>
             </div>
           </div>
-
-          {/* LOGOUT */}
 
           <button
             type="button"
