@@ -6,7 +6,6 @@ import Image from 'next/image'
 
 import { createClient } from '@/lib/supabase/client'
 import { Toast, ToastType } from '@/components/Toast'
-import { ConfirmModal } from '@/components/ConfirmModal'
 
 import {
   ClipboardList,
@@ -23,7 +22,6 @@ import {
   Mail,
   Wrench,
   ArrowLeft,
-  Trash2,
   Building2,
 } from 'lucide-react'
 
@@ -89,9 +87,6 @@ export default function ManagerChecklistsPage() {
   const [checklists, setChecklists] =
     useState<Checklist[]>([])
 
-  const [profile, setProfile] =
-    useState<ManagerProfile | null>(null)
-
   const [branch, setBranch] =
     useState<BranchData | null>(null)
 
@@ -110,35 +105,12 @@ export default function ManagerChecklistsPage() {
   ] = useState<string[] | null>(null)
 
   const [
-    sendingMaintenance,
-    setSendingMaintenance,
-  ] = useState<string | null>(null)
-
-  const [
-    deletingId,
-    setDeletingId,
-  ] = useState<string | null>(null)
-
-  const [
     toast,
     setToast,
   ] = useState<{
     message: string
     type: ToastType
   } | null>(null)
-
-  const [
-    confirmResolve,
-    setConfirmResolve,
-  ] = useState<{
-    checklistId: string
-    vehiclePlate: string | null
-  } | null>(null)
-
-  const [
-    confirmDelete,
-    setConfirmDelete,
-  ] = useState<string | null>(null)
 
   // =====================================================
   // AUXILIARES
@@ -298,10 +270,6 @@ export default function ManagerChecklistsPage() {
           'O gestor ainda não está vinculado a uma base.'
         )
       }
-
-      setProfile(
-        managerProfile
-      )
 
       const branchId =
         managerProfile.branch_id
@@ -482,289 +450,6 @@ export default function ManagerChecklistsPage() {
   }, [])
 
   // =====================================================
-  // EXCLUIR CHECKLIST
-  // =====================================================
-
-  async function handleDeleteChecklist(
-    id: string
-  ) {
-    setDeletingId(id)
-
-    try {
-      if (!profile?.branch_id) {
-        throw new Error(
-          'Base do gestor não identificada.'
-        )
-      }
-
-      const {
-        error,
-      } = await supabase
-        .from(
-          'driver_checklists'
-        )
-        .delete()
-        .eq(
-          'id',
-          id
-        )
-        .eq(
-          'branch_id',
-          profile.branch_id
-        )
-
-      if (error) {
-        throw error
-      }
-
-      showToast(
-        'Checklist excluído com sucesso!',
-        'success'
-      )
-
-      setChecklists(
-        (previous) =>
-          previous.filter(
-            (item) =>
-              item.id !== id
-          )
-      )
-    } catch (
-      err: unknown
-    ) {
-      console.error(
-        'Erro ao excluir:',
-        err
-      )
-
-      const message =
-        err instanceof Error
-          ? err.message
-          : 'Erro ao excluir'
-
-      showToast(
-        `Erro ao excluir checklist: ${message}`,
-        'error'
-      )
-    } finally {
-      setDeletingId(null)
-      setConfirmDelete(null)
-    }
-  }
-
-  // =====================================================
-  // RESOLVER MANUTENÇÃO
-  // =====================================================
-
-  async function executeResolveMaintenance(
-    checklistId: string,
-    vehiclePlate: string | null
-  ) {
-    setSendingMaintenance(
-      checklistId
-    )
-
-    try {
-      if (
-        !profile?.branch_id
-      ) {
-        throw new Error(
-          'Base do gestor não identificada.'
-        )
-      }
-
-      const branchId =
-        profile.branch_id
-
-      // ===============================================
-      // BUSCAR CHECKLIST
-      // ===============================================
-
-      const {
-        data: current,
-        error: fetchError,
-      } = await supabase
-        .from(
-          'driver_checklists'
-        )
-        .select('*')
-        .eq(
-          'id',
-          checklistId
-        )
-        .eq(
-          'branch_id',
-          branchId
-        )
-        .maybeSingle()
-
-      if (
-        fetchError ||
-        !current
-      ) {
-        throw new Error(
-          'Checklist não encontrado.'
-        )
-      }
-
-      // ===============================================
-      // MARCAR ITENS COMO RESOLVIDOS
-      // ===============================================
-
-      const updatedItems =
-        Array.isArray(
-          current.items
-        )
-          ? current.items.map(
-              (
-                item: ChecklistItem
-              ) => ({
-                ...item,
-
-                ok: true,
-
-                value:
-                  item.value ===
-                  'NÃO'
-                    ? 'SIM'
-                    : item.value,
-              })
-            )
-          : []
-
-      // ===============================================
-      // NOVO CHECKLIST RESOLVIDO
-      // ===============================================
-
-      const {
-        error: insertError,
-      } = await supabase
-        .from(
-          'driver_checklists'
-        )
-        .insert({
-          id:
-            crypto.randomUUID(),
-
-          driver:
-            current.driver,
-
-          driver_email:
-            current.driver_email,
-
-          vehicle_plate:
-            current.vehicle_plate,
-
-          vehicle_model:
-            current.vehicle_model,
-
-          items:
-            updatedItems,
-
-          has_issue:
-            false,
-
-          observation:
-            'Manutenção realizada e pendências resolvidas pelo gestor.',
-
-          photos:
-            current.photos,
-
-          branch_id:
-            branchId,
-
-          vehicle_id:
-            current.vehicle_id ??
-            null,
-
-          driver_id:
-            current.driver_id ??
-            null,
-
-          user_id:
-            current.user_id ??
-            null,
-
-          km_atual:
-            current.km_atual ??
-            null,
-        })
-
-      if (insertError) {
-        throw insertError
-      }
-
-      // ===============================================
-      // ATUALIZAR VEÍCULO
-      // ===============================================
-
-      if (vehiclePlate) {
-        const {
-          error:
-            vehicleUpdateError,
-        } = await supabase
-          .from('vehicles')
-          .update({
-            status:
-              'Ativo',
-
-            updated_at:
-              new Date().toISOString(),
-          })
-          .eq(
-            'current_branch_id',
-            branchId
-          )
-          .ilike(
-            'plate',
-            vehiclePlate.trim()
-          )
-
-        if (
-          vehicleUpdateError
-        ) {
-          console.error(
-            'Checklist resolvido, mas houve erro ao atualizar veículo:',
-            vehicleUpdateError
-          )
-        }
-      }
-
-      showToast(
-        'Manutenção marcada como resolvida!',
-        'success'
-      )
-
-      await fetchChecklists()
-    } catch (
-      err: unknown
-    ) {
-      console.error(
-        'Erro ao resolver:',
-        err
-      )
-
-      const message =
-        err instanceof Error
-          ? err.message
-          : 'Erro inesperado'
-
-      showToast(
-        `Falha ao resolver manutenção: ${message}`,
-        'error'
-      )
-    } finally {
-      setSendingMaintenance(
-        null
-      )
-
-      setConfirmResolve(
-        null
-      )
-    }
-  }
-
-  // =====================================================
   // FILTROS
   // =====================================================
 
@@ -880,63 +565,6 @@ export default function ManagerChecklistsPage() {
           }
           onClose={() =>
             setToast(null)
-          }
-        />
-      )}
-
-      {/* MODAL RESOLVER */}
-
-      {confirmResolve && (
-        <ConfirmModal
-          isOpen={
-            !!confirmResolve
-          }
-          title="Resolver Manutenção"
-          message="Deseja marcar todas as avarias deste veículo como resolvidas e atualizar o status para Ativo?"
-          isLoading={
-            sendingMaintenance ===
-            confirmResolve.checklistId
-          }
-          confirmText="Confirmar"
-          cancelText="Cancelar"
-          onConfirm={() =>
-            executeResolveMaintenance(
-              confirmResolve.checklistId,
-              confirmResolve.vehiclePlate
-            )
-          }
-          onCancel={() =>
-            setConfirmResolve(
-              null
-            )
-          }
-        />
-      )}
-
-      {/* MODAL EXCLUSÃO */}
-
-      {confirmDelete && (
-        <ConfirmModal
-          isOpen={
-            !!confirmDelete
-          }
-          title="Excluir Checklist"
-          message="Tem certeza que deseja apagar permanentemente este checklist?"
-          isLoading={
-            deletingId ===
-            confirmDelete
-          }
-          confirmText="Excluir"
-          cancelText="Cancelar"
-          onConfirm={() =>
-            handleDeleteChecklist(
-              confirmDelete
-            )
-          }
-          onCancel={() =>
-            setConfirmDelete(
-              null
-            )
           }
         />
       )}
@@ -1287,27 +915,6 @@ export default function ManagerChecklistsPage() {
 
                           </span>
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setConfirmDelete(
-                                item.id
-                              )
-                            }
-                            disabled={
-                              deletingId ===
-                              item.id
-                            }
-                            className="rounded-lg p-1 text-zinc-500 transition hover:bg-zinc-800 hover:text-red-400"
-                            title="Excluir checklist"
-                          >
-                            {deletingId ===
-                            item.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-3.5 w-3.5" />
-                            )}
-                          </button>
 
                         </div>
 
@@ -1459,35 +1066,13 @@ export default function ManagerChecklistsPage() {
 
                           </p>
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setConfirmResolve(
-                                {
-                                  checklistId:
-                                    item.id,
-
-                                  vehiclePlate:
-                                    item.vehicle_plate,
-                                }
-                              )
-                            }
-                            disabled={
-                              sendingMaintenance ===
-                              item.id
-                            }
-                            className="mt-3 flex w-full items-center justify-center gap-1 rounded-lg bg-green-600 py-2 text-xs font-semibold text-white transition hover:bg-green-500 disabled:opacity-50"
+                          <Link
+                            href="/maintenance"
+                            className="mt-3 flex w-full items-center justify-center gap-1 rounded-lg bg-amber-600 py-2 text-xs font-semibold text-white transition hover:bg-amber-500"
                           >
-                            {sendingMaintenance ===
-                            item.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Wrench className="h-3.5 w-3.5" />
-                            )}
-
-                            Resolver Manutenção
-
-                          </button>
+                            <Wrench className="h-3.5 w-3.5" />
+                            Acompanhar na manutenção
+                          </Link>
 
                         </div>
                       )}

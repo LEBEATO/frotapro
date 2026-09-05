@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 
@@ -216,8 +217,16 @@ type VehicleData = {
   year: string
   status: string
   mileage: number | null
-  driver_id: string | null
   current_branch_id: string | null
+}
+
+type DriverProfile = {
+  id: string
+  full_name: string
+  email: string
+  role: string
+  branch_id: string | null
+  active: boolean
 }
 
 // =====================================================
@@ -282,6 +291,25 @@ export default function DriverChecklistPage() {
     setLoadingVehicle,
   ] =
     useState(true)
+
+  const [
+    profile,
+    setProfile,
+  ] =
+    useState<
+      DriverProfile | null
+    >(null)
+
+  const [
+    submissionId,
+    setSubmissionId,
+  ] = useState(
+    () =>
+      crypto.randomUUID()
+  )
+
+  const submissionInFlightRef =
+    useRef(false)
 
   const {
     register,
@@ -360,14 +388,47 @@ export default function DriverChecklistPage() {
           )
         }
 
-        let vehicleData:
-          | VehicleData
-          | null =
-          null
+        const {
+          data:
+            profileData,
+          error:
+            profileError,
+        } =
+          await supabase
+            .from(
+              'profiles'
+            )
+            .select(
+              'id, full_name, email, role, branch_id, active'
+            )
+            .eq(
+              'id',
+              user.id
+            )
+            .single()
 
-        // ===============================================
-        // 1. ATRIBUIÇÃO OFICIAL
-        // ===============================================
+        if (
+          profileError ||
+          !profileData
+        ) {
+          throw new Error(
+            'Perfil do motorista não encontrado.'
+          )
+        }
+
+        const driverProfile =
+          profileData as DriverProfile
+
+        if (
+          !driverProfile.active ||
+          driverProfile.role !==
+            'driver' ||
+          !driverProfile.branch_id
+        ) {
+          throw new Error(
+            'O perfil do motorista não está ativo ou não possui base válida.'
+          )
+        }
 
         const {
           data:
@@ -380,7 +441,7 @@ export default function DriverChecklistPage() {
               'driver_vehicle_assignments'
             )
             .select(
-              'vehicle_id'
+              'vehicle_id, branch_id'
             )
             .eq(
               'driver_id',
@@ -392,143 +453,71 @@ export default function DriverChecklistPage() {
             )
             .maybeSingle()
 
+        if (assignmentError) {
+          throw assignmentError
+        }
+
+        if (!assignment) {
+          if (mounted) {
+            setProfile(
+              driverProfile
+            )
+            setVehicle(null)
+          }
+
+          return
+        }
+
         if (
-          assignmentError
+          assignment.branch_id !==
+          driverProfile.branch_id
         ) {
-          console.error(
-            'Erro ao buscar atribuição:',
-            assignmentError
+          throw new Error(
+            'A atribuição ativa pertence a uma base diferente do motorista.'
+          )
+        }
+
+        const {
+          data:
+            vehicleData,
+          error:
+            vehicleError,
+        } =
+          await supabase
+            .from(
+              'vehicles'
+            )
+            .select(`
+              id,
+              model,
+              plate,
+              year,
+              status,
+              mileage,
+              current_branch_id
+            `)
+            .eq(
+              'id',
+              assignment.vehicle_id
+            )
+            .single()
+
+        if (
+          vehicleError ||
+          !vehicleData
+        ) {
+          throw new Error(
+            'Veículo da atribuição ativa não encontrado.'
           )
         }
 
         if (
-          assignment
-            ?.vehicle_id
+          vehicleData.current_branch_id !==
+          driverProfile.branch_id
         ) {
-          const {
-            data,
-            error,
-          } =
-            await supabase
-              .from(
-                'vehicles'
-              )
-              .select(`
-                id,
-                model,
-                plate,
-                year,
-                status,
-                mileage,
-                driver_id,
-                current_branch_id
-              `)
-              .eq(
-                'id',
-                assignment.vehicle_id
-              )
-              .maybeSingle()
-
-          if (error) {
-            console.error(
-              'Erro ao buscar veículo:',
-              error
-            )
-          } else if (
-            data
-          ) {
-            vehicleData =
-              data as VehicleData
-          }
-        }
-
-        // ===============================================
-        // 2. FALLBACK DRIVER_ID
-        // ===============================================
-
-        if (
-          !vehicleData
-        ) {
-          const {
-            data,
-            error,
-          } =
-            await supabase
-              .from(
-                'vehicles'
-              )
-              .select(`
-                id,
-                model,
-                plate,
-                year,
-                status,
-                mileage,
-                driver_id,
-                current_branch_id
-              `)
-              .eq(
-                'driver_id',
-                user.id
-              )
-              .maybeSingle()
-
-          if (error) {
-            console.error(
-              'Erro ao buscar veículo por driver_id:',
-              error
-            )
-          } else if (
-            data
-          ) {
-            vehicleData =
-              data as VehicleData
-          }
-        }
-
-        // ===============================================
-        // 3. FALLBACK LEGADO POR EMAIL
-        // ===============================================
-
-        if (
-          !vehicleData &&
-          user.email
-        ) {
-          const {
-            data,
-            error,
-          } =
-            await supabase
-              .from(
-                'vehicles'
-              )
-              .select(`
-                id,
-                model,
-                plate,
-                year,
-                status,
-                mileage,
-                driver_id,
-                current_branch_id
-              `)
-              .eq(
-                'driver_email',
-                user.email
-              )
-              .maybeSingle()
-
-          if (error) {
-            console.error(
-              'Erro ao buscar veículo por e-mail:',
-              error
-            )
-          } else if (
-            data
-          ) {
-            vehicleData =
-              data as VehicleData
-          }
+          throw new Error(
+            'O veículo atribuído pertence a uma base diferente do motorista.'
+          )
         }
 
         if (
@@ -537,18 +526,11 @@ export default function DriverChecklistPage() {
           return
         }
 
-        if (
-          !vehicleData
-        ) {
-          setVehicle(
-            null
-          )
-
-          return
-        }
-
+        setProfile(
+          driverProfile
+        )
         setVehicle(
-          vehicleData
+          vehicleData as VehicleData
         )
 
         setValue(
@@ -776,19 +758,11 @@ export default function DriverChecklistPage() {
       }
 
       if (
-        !vehicle
+        !vehicle ||
+        !profile
       ) {
         throw new Error(
           'Nenhum veículo está atribuído ao motorista.'
-        )
-      }
-
-      if (
-        !vehicle
-          .driver_id
-      ) {
-        throw new Error(
-          'O veículo não possui motorista vinculado.'
         )
       }
 
@@ -1020,33 +994,25 @@ export default function DriverChecklistPage() {
           )
           .insert({
             id:
-              crypto.randomUUID(),
+              submissionId,
 
             user_id:
               user.id,
 
             driver_id:
-              vehicle.driver_id,
+              user.id,
 
             vehicle_id:
               vehicle.id,
 
             branch_id:
-              vehicle.current_branch_id,
+              profile.branch_id,
 
             driver:
-              user
-                .user_metadata
-                ?.full_name ||
-              user.email
-                ?.split(
-                  '@'
-                )[0] ||
-              'Motorista',
+              profile.full_name,
 
             driver_email:
-              user.email ??
-              '',
+              profile.email,
 
             vehicle_model:
               vehicle.model,
@@ -1076,7 +1042,40 @@ export default function DriverChecklistPage() {
       if (
         insertError
       ) {
-        throw insertError
+        if (
+          insertError.code !==
+          '23505'
+        ) {
+          throw insertError
+        }
+
+        const {
+          data:
+            existingSubmission,
+          error:
+            existingError,
+        } =
+          await supabase
+            .from(
+              'driver_checklists'
+            )
+            .select('id')
+            .eq(
+              'id',
+              submissionId
+            )
+            .eq(
+              'user_id',
+              user.id
+            )
+            .maybeSingle()
+
+        if (
+          existingError ||
+          !existingSubmission
+        ) {
+          throw insertError
+        }
       }
 
       // O trigger do banco já atualiza:
@@ -1104,6 +1103,10 @@ export default function DriverChecklistPage() {
 
       setPhotoPreviews(
         []
+      )
+
+      setSubmissionId(
+        crypto.randomUUID()
       )
 
       setVehicle(
@@ -1155,6 +1158,30 @@ export default function DriverChecklistPage() {
         false
       )
     }
+  }
+
+  function handleChecklistFormSubmit(
+    event:
+      React.FormEvent<HTMLFormElement>
+  ) {
+    if (
+      submissionInFlightRef.current
+    ) {
+      event.preventDefault()
+      return
+    }
+
+    submissionInFlightRef.current =
+      true
+
+    void handleSubmit(
+      onSubmit
+    )(event).finally(
+      () => {
+        submissionInFlightRef.current =
+          false
+      }
+    )
   }
 
   // =====================================================
@@ -1300,9 +1327,7 @@ export default function DriverChecklistPage() {
         {vehicle && (
           <form
             onSubmit={
-              handleSubmit(
-                onSubmit
-              )
+              handleChecklistFormSubmit
             }
             className="space-y-6"
           >

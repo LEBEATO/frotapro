@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import {
@@ -29,7 +30,9 @@ type DriverProfile = {
   id: string
   full_name: string
   email: string
+  role: string
   branch_id: string | null
+  active: boolean
 }
 
 type AssignedVehicle = {
@@ -112,6 +115,12 @@ export default function DriverFuelPage() {
   const [success, setSuccess] =
     useState('')
 
+  const [submissionId, setSubmissionId] =
+    useState(() => crypto.randomUUID())
+
+  const submissionInFlightRef =
+    useRef(false)
+
   useEffect(() => {
     let mounted = true
 
@@ -137,7 +146,7 @@ export default function DriverFuelPage() {
         } = await supabase
           .from('profiles')
           .select(
-            'id, full_name, email, branch_id'
+            'id, full_name, email, role, branch_id, active'
           )
           .eq('id', user.id)
           .maybeSingle()
@@ -151,13 +160,18 @@ export default function DriverFuelPage() {
           )
         }
 
-        if (!mounted) {
-          return
-        }
-
-        setProfile(
+        const driverProfile =
           profileData as DriverProfile
-        )
+
+        if (
+          !driverProfile.active ||
+          driverProfile.role !== 'driver' ||
+          !driverProfile.branch_id
+        ) {
+          throw new Error(
+            'O perfil do motorista não está ativo ou não possui base válida.'
+          )
+        }
 
         const {
           data: assignment,
@@ -166,96 +180,69 @@ export default function DriverFuelPage() {
           .from(
             'driver_vehicle_assignments'
           )
-          .select('vehicle_id')
+          .select('vehicle_id, branch_id')
           .eq('driver_id', user.id)
           .is('ended_at', null)
           .maybeSingle()
 
         if (assignmentError) {
-          console.error(
-            'Erro ao buscar atribuição:',
-            assignmentError
+          throw assignmentError
+        }
+
+        if (!assignment) {
+          if (mounted) {
+            setProfile(driverProfile)
+            setVehicle(null)
+          }
+
+          return
+        }
+
+        if (
+          assignment.branch_id !==
+          driverProfile.branch_id
+        ) {
+          throw new Error(
+            'A atribuição ativa pertence a uma base diferente do motorista.'
           )
         }
 
-        let vehicleData:
-          | AssignedVehicle
-          | null = null
+        const {
+          data: vehicleData,
+          error: vehicleError,
+        } = await supabase
+          .from('vehicles')
+          .select(`
+            id,
+            model,
+            plate,
+            mileage,
+            current_branch_id
+          `)
+          .eq('id', assignment.vehicle_id)
+          .single()
 
-        if (assignment?.vehicle_id) {
-          const {
-            data,
-            error: vehicleError,
-          } = await supabase
-            .from('vehicles')
-            .select(
-              `
-                id,
-                model,
-                plate,
-                mileage,
-                current_branch_id
-              `
-            )
-            .eq(
-              'id',
-              assignment.vehicle_id
-            )
-            .maybeSingle()
-
-          if (vehicleError) {
-            console.error(
-              'Erro ao buscar veículo atribuído:',
-              vehicleError
-            )
-          } else if (data) {
-            vehicleData =
-              data as AssignedVehicle
-          }
+        if (vehicleError || !vehicleData) {
+          throw new Error(
+            'Veículo da atribuição ativa não encontrado.'
+          )
         }
 
-        // Compatibilidade com veículos antigos
-        // que ainda usam vehicles.driver_id.
-        if (!vehicleData) {
-          const {
-            data,
-            error: fallbackError,
-          } = await supabase
-            .from('vehicles')
-            .select(
-              `
-                id,
-                model,
-                plate,
-                mileage,
-                current_branch_id
-              `
-            )
-            .eq('driver_id', user.id)
-            .maybeSingle()
-
-          if (fallbackError) {
-            console.error(
-              'Erro no fallback do veículo:',
-              fallbackError
-            )
-          } else if (data) {
-            vehicleData =
-              data as AssignedVehicle
-          }
+        if (
+          vehicleData.current_branch_id !==
+          driverProfile.branch_id
+        ) {
+          throw new Error(
+            'O veículo atribuído pertence a uma base diferente do motorista.'
+          )
         }
 
         if (!mounted) {
           return
         }
 
-        if (!vehicleData) {
-          throw new Error(
-            'Nenhum veículo está atribuído ao seu usuário.'
-          )
-        }
-
-        setVehicle(vehicleData)
+        setProfile(driverProfile)
+        setVehicle(vehicleData as AssignedVehicle)
 
         setForm((current) => ({
           ...current,
@@ -469,17 +456,6 @@ export default function DriverFuelPage() {
         100
       : null
 
-  const branchId = useMemo(
-    () =>
-      profile?.branch_id ??
-      vehicle?.current_branch_id ??
-      null,
-    [
-      profile?.branch_id,
-      vehicle?.current_branch_id,
-    ]
-  )
-
   function updateField(
     field: keyof FuelForm,
     value: string
@@ -497,22 +473,24 @@ export default function DriverFuelPage() {
   ) {
     event.preventDefault()
 
-    if (
-      saving ||
-      !profile ||
-      !vehicle
-    ) {
+    if (submissionInFlightRef.current) {
       return
     }
+
+    submissionInFlightRef.current = true
 
     setError('')
     setSuccess('')
 
-    if (!branchId) {
+    if (
+      !profile ||
+      !vehicle ||
+      !profile.branch_id
+    ) {
       setError(
-        'Seu motorista ou veículo ainda não está vinculado a uma base.'
+        'Motorista, atribuição ativa ou base não disponíveis.'
       )
-
+      submissionInFlightRef.current = false
       return
     }
 
@@ -523,7 +501,7 @@ export default function DriverFuelPage() {
       setError(
         'Informe uma quilometragem válida.'
       )
-
+      submissionInFlightRef.current = false
       return
     }
 
@@ -533,7 +511,7 @@ export default function DriverFuelPage() {
       setError(
         'A quilometragem deve ser informada sem casas decimais.'
       )
-
+      submissionInFlightRef.current = false
       return
     }
 
@@ -546,7 +524,7 @@ export default function DriverFuelPage() {
           'pt-BR'
         )} km.`
       )
-
+      submissionInFlightRef.current = false
       return
     }
 
@@ -554,7 +532,7 @@ export default function DriverFuelPage() {
       setError(
         'A quilometragem atual precisa ser maior que a quilometragem anterior para calcular o consumo.'
       )
-
+      submissionInFlightRef.current = false
       return
     }
 
@@ -565,7 +543,7 @@ export default function DriverFuelPage() {
       setError(
         'Informe uma quantidade válida de litros.'
       )
-
+      submissionInFlightRef.current = false
       return
     }
 
@@ -578,7 +556,7 @@ export default function DriverFuelPage() {
       setError(
         'Informe um valor válido para o abastecimento.'
       )
-
+      submissionInFlightRef.current = false
       return
     }
 
@@ -588,7 +566,7 @@ export default function DriverFuelPage() {
       setError(
         'Informe o combustível utilizado.'
       )
-
+      submissionInFlightRef.current = false
       return
     }
 
@@ -598,15 +576,21 @@ export default function DriverFuelPage() {
       setError(
         'Informe o posto de combustível.'
       )
-
+      submissionInFlightRef.current = false
       return
     }
 
     try {
       setSaving(true)
 
-      const recordId =
-        crypto.randomUUID()
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
+
+      if (userError || !user || user.id !== profile.id) {
+        throw new Error('Usuário não autenticado.')
+      }
 
       const normalizedDistance =
         Math.round(distance)
@@ -631,7 +615,7 @@ export default function DriverFuelPage() {
       } = await supabase
         .from('fuel_records')
         .insert({
-          id: recordId,
+          id: submissionId,
 
           user_id: profile.id,
 
@@ -645,7 +629,7 @@ export default function DriverFuelPage() {
             profile.email,
 
           branch_id:
-            branchId,
+            profile.branch_id,
 
           vehicle_id:
             vehicle.id,
@@ -692,30 +676,23 @@ export default function DriverFuelPage() {
         })
 
       if (insertError) {
-        throw insertError
-      }
+        if (insertError.code !== '23505') {
+          throw insertError
+        }
 
-      const {
-        error: vehicleError,
-      } = await supabase
-        .from('vehicles')
-        .update({
-          mileage:
-            currentKm,
+        const {
+          data: existingSubmission,
+          error: existingError,
+        } = await supabase
+          .from('fuel_records')
+          .select('id')
+          .eq('id', submissionId)
+          .eq('user_id', user.id)
+          .maybeSingle()
 
-          updated_at:
-            new Date().toISOString(),
-        })
-        .eq(
-          'id',
-          vehicle.id
-        )
-
-      if (vehicleError) {
-        console.error(
-          'Abastecimento registrado, mas houve erro ao atualizar o KM do veículo:',
-          vehicleError
-        )
+        if (existingError || !existingSubmission) {
+          throw insertError
+        }
       }
 
       setVehicle(
@@ -744,6 +721,8 @@ export default function DriverFuelPage() {
           ),
       })
 
+      setSubmissionId(crypto.randomUUID())
+
       setSuccess(
         `Abastecimento registrado com sucesso. Consumo calculado: ${normalizedKmPerLiter.toFixed(
           2
@@ -767,6 +746,7 @@ export default function DriverFuelPage() {
       )
     } finally {
       setSaving(false)
+      submissionInFlightRef.current = false
     }
   }
 

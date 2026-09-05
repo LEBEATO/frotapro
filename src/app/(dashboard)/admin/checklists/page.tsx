@@ -27,7 +27,6 @@ import {
 } from 'lucide-react'
 
 import { AppShell } from '@/components/layout/AppShell'
-import { ConfirmModal } from '@/components/ConfirmModal'
 import { Toast, type ToastType } from '@/components/Toast'
 import { createClient } from '@/lib/supabase/client'
 
@@ -79,6 +78,11 @@ type VehicleRow = {
   issues: string | null
 }
 
+type MaintenanceRow = {
+  id: string
+  source_checklist_id: string | null
+}
+
 type IssueFilter =
   | 'all'
   | 'with_issue'
@@ -121,6 +125,9 @@ export default function AdminChecklistsPage() {
   const [vehicles, setVehicles] =
     useState<VehicleRow[]>([])
 
+  const [maintenances, setMaintenances] =
+    useState<MaintenanceRow[]>([])
+
   const [search, setSearch] =
     useState('')
 
@@ -129,17 +136,6 @@ export default function AdminChecklistsPage() {
 
   const [loading, setLoading] =
     useState(true)
-
-  const [sendingId, setSendingId] =
-    useState<string | null>(null)
-
-  const [
-    confirmMaintenance,
-    setConfirmMaintenance,
-  ] =
-    useState<ChecklistRow | null>(
-      null
-    )
 
   const [toast, setToast] =
     useState<{
@@ -177,6 +173,7 @@ export default function AdminChecklistsPage() {
           checklistResponse,
           branchResponse,
           vehicleResponse,
+          maintenanceResponse,
         ] = await Promise.all([
           supabase
             .from('driver_checklists')
@@ -229,6 +226,13 @@ export default function AdminChecklistsPage() {
               mileage,
               issues
             `),
+
+          supabase
+            .from('maintenance_records')
+            .select(`
+              id,
+              source_checklist_id
+            `),
         ])
 
         if (
@@ -247,6 +251,12 @@ export default function AdminChecklistsPage() {
           vehicleResponse.error
         ) {
           throw vehicleResponse.error
+        }
+
+        if (
+          maintenanceResponse.error
+        ) {
+          throw maintenanceResponse.error
         }
 
         setChecklists(
@@ -268,6 +278,13 @@ export default function AdminChecklistsPage() {
             vehicleResponse.data ??
             []
           ) as VehicleRow[]
+        )
+
+        setMaintenances(
+          (
+            maintenanceResponse.data ??
+            []
+          ) as MaintenanceRow[]
         )
       } catch (error) {
         console.error(
@@ -323,6 +340,25 @@ export default function AdminChecklistsPage() {
           )
         ),
       [vehicles]
+    )
+
+  const maintenanceByChecklist =
+    useMemo(
+      () =>
+        new Map(
+          maintenances
+            .filter(
+              (maintenance) =>
+                maintenance.source_checklist_id
+            )
+            .map(
+              (maintenance) => [
+                maintenance.source_checklist_id as string,
+                maintenance,
+              ]
+            )
+        ),
+      [maintenances]
     )
 
   // =====================================================
@@ -444,253 +480,6 @@ export default function AdminChecklistsPage() {
     ).length
 
   // =====================================================
-  // ENCAMINHAR PARA MANUTENÇÃO
-  // =====================================================
-
-  async function handleSendToMaintenance(
-    checklist: ChecklistRow
-  ) {
-    setSendingId(checklist.id)
-
-    try {
-      if (
-        !checklist.has_issue
-      ) {
-        throw new Error(
-          'Este checklist não possui ocorrência.'
-        )
-      }
-
-      if (
-        !checklist.vehicle_id
-      ) {
-        throw new Error(
-          'Este checklist não possui um veículo vinculado.'
-        )
-      }
-
-      const vehicle =
-        vehicleMap.get(
-          checklist.vehicle_id
-        )
-
-      if (!vehicle) {
-        throw new Error(
-          'O veículo deste checklist não foi encontrado.'
-        )
-      }
-
-      if (
-        vehicle.status ===
-        'Manutenção'
-      ) {
-        showToast(
-          `O veículo ${checklist.vehicle_plate} já está em manutenção.`,
-          'success'
-        )
-
-        setConfirmMaintenance(
-          null
-        )
-
-        return
-      }
-
-      const now =
-        new Date().toISOString()
-
-      const issueDescription =
-        checklist.observation?.trim()
-          ? checklist.observation.trim()
-          : 'Ocorrência identificada no checklist diário.'
-
-      // =================================================
-      // 1. VERIFICAR SE JÁ EXISTE MANUTENÇÃO ABERTA
-      // =================================================
-
-      const {
-        data:
-          existingMaintenance,
-        error:
-          existingMaintenanceError,
-      } = await supabase
-        .from(
-          'maintenance_records'
-        )
-        .select('id')
-        .eq(
-          'vehicle_id',
-          checklist.vehicle_id
-        )
-        .or(
-          'status.eq.pending,status.eq.in_progress,completed_at.is.null'
-        )
-        .limit(1)
-
-      if (
-        existingMaintenanceError
-      ) {
-        throw existingMaintenanceError
-      }
-
-      // =================================================
-      // 2. CRIAR MANUTENÇÃO SE NÃO EXISTIR
-      // =================================================
-
-      if (
-        !existingMaintenance ||
-        existingMaintenance.length ===
-          0
-      ) {
-        const {
-          data: {
-            user,
-          },
-          error:
-            userError,
-        } =
-          await supabase.auth.getUser()
-
-        if (
-          userError ||
-          !user
-        ) {
-          throw new Error(
-            'Usuário não autenticado.'
-          )
-        }
-
-        const {
-          error:
-            maintenanceError,
-        } = await supabase
-          .from(
-            'maintenance_records'
-          )
-          .insert({
-            vehicle_id:
-              checklist.vehicle_id,
-
-            vehicle_plate:
-              checklist.vehicle_plate,
-
-            branch_id:
-              checklist.branch_id,
-
-            opened_by:
-              user.id,
-
-            mechanic_name:
-              'Não informado',
-
-            service_description:
-              issueDescription,
-
-            maintenance_type:
-              'Checklist diário',
-
-            mileage:
-              checklist.km_atual,
-
-            status:
-              'pending',
-
-            notes:
-              checklist.manager_observation
-                ? `${issueDescription}\n\nObservação da gestão: ${checklist.manager_observation}`
-                : issueDescription,
-
-            workshop:
-              null,
-
-            started_at:
-              now,
-
-            completed_at:
-              null,
-          })
-
-        if (
-          maintenanceError
-        ) {
-          throw maintenanceError
-        }
-      }
-
-      // =================================================
-      // 3. MUDAR STATUS DO VEÍCULO
-      // =================================================
-
-      const {
-        error:
-          vehicleError,
-      } = await supabase
-        .from('vehicles')
-        .update({
-          status:
-            'Manutenção',
-
-          issues:
-            issueDescription,
-
-          updated_at:
-            now,
-        })
-        .eq(
-          'id',
-          checklist.vehicle_id
-        )
-
-      if (vehicleError) {
-        throw vehicleError
-      }
-
-      // =================================================
-      // 4. ATUALIZAR LISTA LOCAL
-      // =================================================
-
-      setVehicles(
-        (current) =>
-          current.map(
-            (item) =>
-              item.id ===
-              checklist.vehicle_id
-                ? {
-                    ...item,
-
-                    status:
-                      'Manutenção',
-
-                    issues:
-                      issueDescription,
-                  }
-                : item
-          )
-      )
-
-      showToast(
-        `O veículo ${checklist.vehicle_plate} foi encaminhado para manutenção.`,
-        'success'
-      )
-    } catch (error) {
-      console.error(
-        'Erro ao encaminhar checklist para manutenção:',
-        error
-      )
-
-      showToast(
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível encaminhar o veículo para manutenção.',
-        'error'
-      )
-    } finally {
-      setSendingId(null)
-      setConfirmMaintenance(null)
-    }
-  }
-
-  // =====================================================
   // UI
   // =====================================================
 
@@ -706,30 +495,6 @@ export default function AdminChecklistsPage() {
           }
           onClose={() =>
             setToast(null)
-          }
-        />
-      )}
-
-      {confirmMaintenance && (
-        <ConfirmModal
-          isOpen
-          title="Encaminhar para manutenção"
-          message={`Deseja encaminhar o veículo ${confirmMaintenance.vehicle_plate} para manutenção? O veículo ficará indisponível para operação até que a manutenção seja concluída.`}
-          isLoading={
-            sendingId ===
-            confirmMaintenance.id
-          }
-          confirmText="Encaminhar"
-          cancelText="Cancelar"
-          onConfirm={() =>
-            void handleSendToMaintenance(
-              confirmMaintenance
-            )
-          }
-          onCancel={() =>
-            setConfirmMaintenance(
-              null
-            )
           }
         />
       )}
@@ -1036,9 +801,10 @@ export default function AdminChecklistsPage() {
                   vehicle?.status ===
                   'Manutenção'
 
-                const sending =
-                  sendingId ===
-                  checklist.id
+                const maintenance =
+                  maintenanceByChecklist.get(
+                    checklist.id
+                  )
 
                 return (
                   <article
@@ -1252,48 +1018,15 @@ export default function AdminChecklistsPage() {
 
                       <div className="mt-5 border-t border-zinc-800 pt-5">
 
-                        {isMaintenance ? (
-
-                          <Link
-                            href="/maintenance"
-                            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2.5 text-sm font-semibold text-amber-400 transition hover:bg-amber-500/10"
-                          >
-                            <Wrench className="h-4 w-4" />
-
-                            Ver na manutenção
-                          </Link>
-
-                        ) : (
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setConfirmMaintenance(
-                                checklist
-                              )
-                            }
-                            disabled={
-                              sending ||
-                              !checklist.vehicle_id
-                            }
-                            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-
-                            {sending ? (
-                              <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Encaminhando...
-                              </>
-                            ) : (
-                              <>
-                                <Wrench className="h-4 w-4" />
-                                Encaminhar para manutenção
-                              </>
-                            )}
-
-                          </button>
-
-                        )}
+                        <Link
+                          href="/maintenance"
+                          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2.5 text-sm font-semibold text-amber-400 transition hover:bg-amber-500/10"
+                        >
+                          <Wrench className="h-4 w-4" />
+                          {maintenance
+                            ? 'Ver manutenção vinculada'
+                            : 'Consultar fluxo de manutenção'}
+                        </Link>
 
                       </div>
 
