@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Supabase local/temp
+supabase/.temp/
+
+# Snapshot local do schema
+supabase-schema-current.sql
