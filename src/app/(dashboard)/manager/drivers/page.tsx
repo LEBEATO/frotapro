@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 
@@ -25,6 +26,7 @@ import {
 } from 'lucide-react'
 
 import { AppShell } from '@/components/layout/AppShell'
+import { ConfirmModal } from '@/components/ConfirmModal'
 import { createClient } from '@/lib/supabase/client'
 import { driverVehicleAssignmentSchema } from '@/lib/schemas/driver-vehicle-assignment'
 
@@ -114,6 +116,9 @@ export default function ManagerDriversPage() {
 
   const [saving, setSaving] =
     useState(false)
+  const assignmentInFlight = useRef(false)
+  const removalTriggerRef = useRef<HTMLButtonElement>(null)
+  const [confirmRemoval, setConfirmRemoval] = useState(false)
 
   const [errorMessage, setErrorMessage] =
     useState('')
@@ -530,7 +535,7 @@ export default function ManagerDriversPage() {
   // =====================================================
 
   async function submitAssignment(operation: 'assign' | 'replace' | 'remove') {
-    if (saving || !selectedDriver) return
+    if (saving || assignmentInFlight.current || !selectedDriver) return
 
     const parsed = driverVehicleAssignmentSchema.safeParse({
       driver_id: selectedDriver.driver.id,
@@ -544,6 +549,7 @@ export default function ManagerDriversPage() {
       return
     }
 
+    assignmentInFlight.current = true
     setSaving(true)
     setErrorMessage('')
     setSuccessMessage('')
@@ -594,6 +600,8 @@ export default function ManagerDriversPage() {
         'Não foi possível confirmar a operação. Atualize os dados antes de tentar novamente.'
       )
     } finally {
+      assignmentInFlight.current = false
+      setConfirmRemoval(false)
       setSaving(false)
     }
   }
@@ -603,8 +611,7 @@ export default function ManagerDriversPage() {
   }
 
   async function handleRemoveAssignment() {
-    if (saving || !selectedDriver?.assignment) return
-    if (!window.confirm(`Deseja remover o veículo de ${selectedDriver.driver.full_name}?`)) return
+    if (saving || !confirmRemoval || !selectedDriver?.assignment) return
     await submitAssignment('remove')
   }
 
@@ -1000,7 +1007,7 @@ export default function ManagerDriversPage() {
 
       {selectedDriver && (
 
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+        <div inert={confirmRemoval} aria-hidden={confirmRemoval || undefined} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
 
           <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl">
 
@@ -1108,9 +1115,10 @@ export default function ManagerDriversPage() {
 
                 {selectedDriver.assignment && (
                   <button
+                    ref={removalTriggerRef}
                     type="button"
                     onClick={() =>
-                      void handleRemoveAssignment()
+                      setConfirmRemoval(true)
                     }
                     disabled={saving}
                     className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-4 text-sm font-semibold text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
@@ -1167,6 +1175,19 @@ export default function ManagerDriversPage() {
 
       )}
 
+      {selectedDriver?.assignment && (
+        <ConfirmModal
+          isOpen={confirmRemoval}
+          title="Remover veículo do motorista"
+          message={`Deseja remover ${selectedDriver.vehicle ? `${selectedDriver.vehicle.model} (${selectedDriver.vehicle.plate})` : `o veículo ${selectedDriver.assignment.vehicle_id}`} de ${selectedDriver.driver.full_name}?`}
+          confirmText="Remover veículo"
+          variant="destructive"
+          returnFocusRef={removalTriggerRef}
+          isLoading={saving}
+          onCancel={() => { if (!saving) setConfirmRemoval(false) }}
+          onConfirm={() => { void handleRemoveAssignment() }}
+        />
+      )}
     </AppShell>
   )
 }
