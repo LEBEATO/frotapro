@@ -26,6 +26,7 @@ import {
 
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
+import { driverVehicleAssignmentSchema } from '@/lib/schemas/driver-vehicle-assignment'
 
 // =====================================================
 // TIPOS
@@ -92,9 +93,6 @@ export default function ManagerDriversPage() {
     () => createClient(),
     []
   )
-
-  const [manager, setManager] =
-    useState<ManagerProfile | null>(null)
 
   const [branch, setBranch] =
     useState<BranchRow | null>(null)
@@ -209,8 +207,6 @@ export default function ManagerDriversPage() {
           'O gestor não possui base vinculada.'
         )
       }
-
-      setManager(managerProfile)
 
       const branchId =
         managerProfile.branch_id
@@ -533,79 +529,18 @@ export default function ManagerDriversPage() {
   // ATRIBUIR / TROCAR VEÍCULO
   // =====================================================
 
-  async function handleAssignVehicle() {
-    if (
-      !selectedDriver ||
-      !manager?.branch_id ||
-      !selectedVehicleId
-    ) {
-      setErrorMessage(
-        'Selecione um veículo.'
-      )
+  async function submitAssignment(operation: 'assign' | 'replace' | 'remove') {
+    if (saving || !selectedDriver) return
 
-      return
-    }
+    const parsed = driverVehicleAssignmentSchema.safeParse({
+      driver_id: selectedDriver.driver.id,
+      operation,
+      vehicle_id: operation === 'remove' ? null : selectedVehicleId,
+      expected_assignment_id: selectedDriver.assignment?.id ?? null,
+    })
 
-    const driver =
-      selectedDriver.driver
-
-    const oldAssignment =
-      selectedDriver.assignment
-
-    const oldVehicle =
-      selectedDriver.vehicle
-
-    if (
-      oldVehicle?.id ===
-      selectedVehicleId
-    ) {
-      setErrorMessage(
-        'Este veículo já está atribuído ao motorista.'
-      )
-
-      return
-    }
-
-    const newVehicle =
-      vehicles.find(
-        (vehicle) =>
-          vehicle.id ===
-          selectedVehicleId
-      )
-
-    if (!newVehicle) {
-      setErrorMessage(
-        'Veículo não encontrado.'
-      )
-
-      return
-    }
-
-    if (
-      newVehicle.current_branch_id !==
-      manager.branch_id
-    ) {
-      setErrorMessage(
-        'Este veículo não pertence à sua base.'
-      )
-
-      return
-    }
-
-    const vehicleAssignment =
-      assignmentByVehicle.get(
-        newVehicle.id
-      )
-
-    if (
-      vehicleAssignment &&
-      vehicleAssignment.driver_id !==
-        driver.id
-    ) {
-      setErrorMessage(
-        'Este veículo já está atribuído a outro motorista.'
-      )
-
+    if (!parsed.success) {
+      setErrorMessage(parsed.error.issues[0]?.message ?? 'Dados inválidos.')
       return
     }
 
@@ -614,223 +549,63 @@ export default function ManagerDriversPage() {
     setSuccessMessage('')
 
     try {
-      const now =
-        new Date().toISOString()
+      const input = parsed.data
+      const { error } = await supabase.rpc('manage_driver_vehicle_assignment', {
+        p_driver_id: input.driver_id,
+        p_operation: input.operation,
+        p_vehicle_id: input.vehicle_id,
+        p_expected_assignment_id: input.expected_assignment_id,
+      })
 
-      // -----------------------------------------------
-      // ENCERRAR ATRIBUIÇÃO ANTERIOR
-      // -----------------------------------------------
-
-      if (oldAssignment) {
-        const {
-          error:
-            closeAssignmentError,
-        } = await supabase
-          .from(
-            'driver_vehicle_assignments'
+      if (error) {
+        const conflict = ['40001', '23505', '40P01', '55P03'].includes(error.code)
+        if (conflict) {
+          // Não substituir silenciosamente a intenção por um vínculo mais recente.
+          setSelectedDriver(null)
+          setSelectedVehicleId('')
+          await loadData()
+          setErrorMessage(
+            'A associação ou a disponibilidade mudou durante a operação. ' +
+            'Confira os dados atualizados e abra novamente o motorista.'
           )
-          .update({
-            ended_at: now,
-          })
-          .eq(
-            'id',
-            oldAssignment.id
-          )
-
-        if (
-          closeAssignmentError
-        ) {
-          throw closeAssignmentError
+          return
         }
-      }
-
-      // -----------------------------------------------
-      // DESVINCULAR VEÍCULO ANTIGO
-      // -----------------------------------------------
-
-      if (
-        oldVehicle &&
-        oldVehicle.id !==
-          newVehicle.id
-      ) {
-        const {
-          error:
-            oldVehicleError,
-        } = await supabase
-          .from('vehicles')
-          .update({
-            driver_id: null,
-            updated_at: now,
-          })
-          .eq('id', oldVehicle.id)
-
-        if (oldVehicleError) {
-          throw oldVehicleError
-        }
-      }
-
-      // -----------------------------------------------
-      // CRIAR NOVA ATRIBUIÇÃO
-      // -----------------------------------------------
-
-      const {
-        error: assignmentError,
-      } = await supabase
-        .from(
-          'driver_vehicle_assignments'
+        setErrorMessage(
+          ['42501', '22023', '23514'].includes(error.code)
+            ? error.message
+            : 'Não foi possível confirmar a operação. Atualize os dados antes de tentar novamente.'
         )
-        .insert({
-          id: crypto.randomUUID(),
-          driver_id: driver.id,
-          vehicle_id: newVehicle.id,
-          branch_id:
-            manager.branch_id,
-          assigned_at: now,
-          ended_at: null,
-        })
-
-      if (assignmentError) {
-        throw assignmentError
+        return
       }
-
-      // -----------------------------------------------
-      // ATUALIZAR VEÍCULO
-      // -----------------------------------------------
-
-      const {
-        error: vehicleError,
-      } = await supabase
-        .from('vehicles')
-        .update({
-          driver_id: driver.id,
-          updated_at: now,
-        })
-        .eq('id', newVehicle.id)
-
-      if (vehicleError) {
-        throw vehicleError
-      }
-
-      setSuccessMessage(
-        oldAssignment
-          ? `Veículo do motorista ${driver.full_name} trocado com sucesso.`
-          : `Veículo atribuído a ${driver.full_name} com sucesso.`
-      )
 
       setSelectedDriver(null)
       setSelectedVehicleId('')
-
+      setSuccessMessage(
+        operation === 'remove'
+          ? 'Veículo removido do motorista.'
+          : operation === 'replace'
+            ? 'Veículo do motorista trocado com sucesso.'
+            : 'Veículo atribuído ao motorista com sucesso.'
+      )
       await loadData()
     } catch (error) {
-      console.error(
-        'Erro ao atribuir veículo:',
-        error
-      )
-
+      console.error('Erro na associação de veículo:', error)
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível atribuir o veículo.'
+        'Não foi possível confirmar a operação. Atualize os dados antes de tentar novamente.'
       )
     } finally {
       setSaving(false)
     }
   }
 
-  // =====================================================
-  // REMOVER ATRIBUIÇÃO
-  // =====================================================
+  async function handleAssignVehicle() {
+    await submitAssignment(selectedDriver?.assignment ? 'replace' : 'assign')
+  }
 
   async function handleRemoveAssignment() {
-    if (
-      !selectedDriver?.assignment
-    ) {
-      return
-    }
-
-    const driver =
-      selectedDriver.driver
-
-    const assignment =
-      selectedDriver.assignment
-
-    const vehicle =
-      selectedDriver.vehicle
-
-    const confirmed =
-      window.confirm(
-        `Deseja remover o veículo de ${driver.full_name}?`
-      )
-
-    if (!confirmed) {
-      return
-    }
-
-    setSaving(true)
-    setErrorMessage('')
-    setSuccessMessage('')
-
-    try {
-      const now =
-        new Date().toISOString()
-
-      // ENCERRA HISTÓRICO
-
-      const {
-        error: assignmentError,
-      } = await supabase
-        .from(
-          'driver_vehicle_assignments'
-        )
-        .update({
-          ended_at: now,
-        })
-        .eq('id', assignment.id)
-
-      if (assignmentError) {
-        throw assignmentError
-      }
-
-      // REMOVE MOTORISTA DO VEÍCULO
-
-      if (vehicle) {
-        const {
-          error: vehicleError,
-        } = await supabase
-          .from('vehicles')
-          .update({
-            driver_id: null,
-            updated_at: now,
-          })
-          .eq('id', vehicle.id)
-
-        if (vehicleError) {
-          throw vehicleError
-        }
-      }
-
-      setSuccessMessage(
-        `Veículo removido de ${driver.full_name}.`
-      )
-
-      setSelectedDriver(null)
-      setSelectedVehicleId('')
-
-      await loadData()
-    } catch (error) {
-      console.error(
-        'Erro ao remover atribuição:',
-        error
-      )
-
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível remover a atribuição.'
-      )
-    } finally {
-      setSaving(false)
-    }
+    if (saving || !selectedDriver?.assignment) return
+    if (!window.confirm(`Deseja remover o veículo de ${selectedDriver.driver.full_name}?`)) return
+    await submitAssignment('remove')
   }
 
   // =====================================================
@@ -1257,6 +1032,11 @@ export default function ManagerDriversPage() {
             </div>
 
             <div className="space-y-5 p-5">
+              {errorMessage && (
+                <p role="alert" className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+                  {errorMessage}
+                </p>
+              )}
 
               {selectedDriver.vehicle && (
 
