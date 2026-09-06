@@ -100,6 +100,9 @@ export default function ManagerMaintenancePage() {
   const [resolvingId, setResolvingId] =
     useState<string | null>(null)
 
+  const [startingId, setStartingId] =
+    useState<string | null>(null)
+
   const [
     confirmResolve,
     setConfirmResolve,
@@ -308,7 +311,7 @@ export default function ManagerMaintenancePage() {
             `
             )
             .or(
-              'status.eq.pending,status.eq.in_progress,completed_at.is.null'
+              'status.eq.pending,status.eq.in_progress'
             )
             .order(
               'started_at',
@@ -714,168 +717,105 @@ export default function ManagerMaintenancePage() {
   // CONCLUIR E LIBERAR VEÍCULO
   // =====================================================
 
-  async function resolveMaintenance(
-    record: MaintenanceView
+  async function transitionMaintenance(
+    record: MaintenanceView,
+    action:
+      | 'start'
+      | 'complete_and_release'
   ) {
-    setResolvingId(record.id)
+    if (record.virtual) {
+      showToast(
+        'Este veículo está em manutenção sem registro vinculado. Regularize um maintenance_record antes de liberar.',
+        'error'
+      )
+
+      return
+    }
+
+    if (action === 'start') {
+      setStartingId(record.id)
+    } else {
+      setResolvingId(record.id)
+    }
 
     try {
-      const now =
-        new Date().toISOString()
-
-      // ================================================
-      // 1. CONCLUIR O REGISTRO DE MANUTENÇÃO
-      // ================================================
-
-      if (!record.virtual) {
-        const {
-          error:
-            maintenanceError,
-        } = await supabase
-          .from(
-            'maintenance_records'
-          )
-          .update({
-            status:
-              'completed',
-
-            completed_at:
-              now,
-
-            updated_at:
-              now,
-          })
-          .eq(
-            'id',
-            record.id
-          )
-
-        if (
-          maintenanceError
-        ) {
-          throw maintenanceError
-        }
-      }
-
-      // ================================================
-      // 2. VERIFICAR SE EXISTE OUTRA MANUTENÇÃO
-      // ================================================
-
-      if (record.vehicle_id) {
-        let hasOtherPending =
-          false
-
-        if (!record.virtual) {
-          const {
-            data:
-              otherPending,
-            error:
-              otherPendingError,
-          } = await supabase
-            .from(
-              'maintenance_records'
-            )
-            .select('id')
-            .eq(
-              'vehicle_id',
-              record.vehicle_id
-            )
-            .neq(
-              'id',
-              record.id
-            )
-            .or(
-              'status.eq.pending,status.eq.in_progress,completed_at.is.null'
-            )
-            .limit(1)
-
-          if (
-            otherPendingError
-          ) {
-            throw otherPendingError
+      const response =
+        await fetch(
+          `/api/maintenance/${record.id}/transition`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify({
+              action,
+            }),
           }
+        )
 
-          hasOtherPending =
-            Boolean(
-              otherPending &&
-                otherPending.length >
-                  0
-            )
+      const result =
+        (await response.json()) as {
+          success?: boolean
+          message?: string
+          error?: string
         }
 
-        // ================================================
-        // 3. LIBERAR VEÍCULO SE NÃO HOUVER OUTRA PENDÊNCIA
-        // ================================================
-
-        if (!hasOtherPending) {
-          const {
-            error:
-              vehicleError,
-          } = await supabase
-            .from('vehicles')
-            .update({
-              status:
-                'Ativo',
-
-              issues: null,
-
-              updated_at:
-                now,
-            })
-            .eq(
-              'id',
-              record.vehicle_id
-            )
-
-          if (
-            vehicleError
-          ) {
-            throw vehicleError
-          }
-
-          showToast(
-            `Manutenção concluída. O veículo ${record.vehicle_plate} foi liberado e voltou para ATIVO.`,
-            'success'
-          )
-        } else {
-          showToast(
-            `A manutenção foi concluída, mas o veículo ${record.vehicle_plate} continua em manutenção porque existe outra pendência aberta.`,
-            'success'
-          )
-        }
-      } else {
-        showToast(
-          'Manutenção concluída com sucesso.',
-          'success'
+      if (!response.ok) {
+        throw new Error(
+          result.error ??
+            'Não foi possível alterar a manutenção.'
         )
       }
 
-      // ================================================
-      // 4. REMOVER DA LISTA ATUAL
-      // ================================================
+      showToast(
+        result.message ??
+          'Manutenção atualizada com sucesso.',
+        'success'
+      )
+
+      if (action === 'start') {
+        setRecords(
+          (current) =>
+            current.map(
+              (item) =>
+                item.id === record.id
+                  ? {
+                      ...item,
+                      status:
+                        'in_progress',
+                    }
+                  : item
+            )
+        )
+
+        return
+      }
 
       setRecords(
         (current) =>
           current.filter(
             (item) =>
-              item.id !==
-              record.id
+              item.id !== record.id
           )
       )
+
+      return
     } catch (error) {
       console.error(
-        'Erro ao concluir manutenção:',
+        'Erro ao alterar manutenção:',
         error
       )
 
       showToast(
         error instanceof Error
           ? error.message
-          : 'Não foi possível concluir a manutenção.',
+          : 'Não foi possível alterar a manutenção.',
         'error'
       )
     } finally {
       setResolvingId(null)
+      setStartingId(null)
       setConfirmResolve(null)
     }
   }
@@ -927,8 +867,8 @@ export default function ManagerMaintenancePage() {
   const pendingCount =
     records.filter(
       (item) =>
-        item.status !==
-        'in_progress'
+        item.status ===
+        'pending'
     ).length
 
   const inProgressCount =
@@ -976,8 +916,9 @@ export default function ManagerMaintenancePage() {
           confirmText="Concluir e liberar"
           cancelText="Cancelar"
           onConfirm={() =>
-            void resolveMaintenance(
-              confirmResolve
+            void transitionMaintenance(
+              confirmResolve,
+              'complete_and_release'
             )
           }
           onCancel={() =>
@@ -1187,6 +1128,10 @@ export default function ManagerMaintenancePage() {
                   resolvingId ===
                   item.id
 
+                const isStarting =
+                  startingId ===
+                  item.id
+
                 return (
                   <article
                     key={item.id}
@@ -1331,38 +1276,68 @@ export default function ManagerMaintenancePage() {
 
                     </div>
 
-                    {/* ===============================
-                        BOTÃO
-                    =============================== */}
-
                     <div className="mt-auto pt-5">
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setConfirmResolve(
-                            item
-                          )
-                        }
-                        disabled={
-                          isResolving
-                        }
-                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
+                      {item.virtual ? (
+                        <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-3 text-xs leading-5 text-zinc-500">
+                          Veículo em manutenção sem maintenance_record vinculado. Regularize o registro para preservar o histórico antes da liberação.
+                        </div>
+                      ) : isInProgress ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setConfirmResolve(
+                              item
+                            )
+                          }
+                          disabled={
+                            isResolving
+                          }
+                          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
 
-                        {isResolving ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Liberando...
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="h-4 w-4" />
-                            Concluir e liberar veículo
-                          </>
-                        )}
+                          {isResolving ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Liberando...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="h-4 w-4" />
+                              Concluir e liberar veículo
+                            </>
+                          )}
 
-                      </button>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void transitionMaintenance(
+                              item,
+                              'start'
+                            )
+                          }
+                          disabled={
+                            isStarting
+                          }
+                          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+
+                          {isStarting ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Iniciando...
+                            </>
+                          ) : (
+                            <>
+                              <Clock3 className="h-4 w-4" />
+                              Iniciar manutenção
+                            </>
+                          )}
+
+                        </button>
+                      )}
 
                     </div>
 
