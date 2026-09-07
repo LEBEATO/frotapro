@@ -5,7 +5,6 @@ import {
   useEffect,
   useMemo,
   useState,
-  type ComponentType,
 } from 'react'
 
 import Link from 'next/link'
@@ -13,63 +12,24 @@ import Link from 'next/link'
 import {
   ArrowLeft,
   Building2,
-  Droplets,
   Fuel,
-  Gauge,
   Loader2,
-  MapPin,
   RefreshCw,
   Search,
-  UserRound,
-  WalletCards,
 } from 'lucide-react'
+
+import { AdminFuelRecordCard } from '@/components/fuel/AdminFuelRecordCard'
+import { AdminFuelSummary } from '@/components/fuel/AdminFuelSummary'
+import type { FuelRecord, BranchRow } from '@/components/fuel/admin-types'
 
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
-
-// =====================================================
-// TIPOS
-// =====================================================
-
-type FuelRecord = {
-  id: string
-  driver: string
-  driver_email: string | null
-  vehicle_model: string
-  vehicle_plate: string
-  fuel_type: string
-  previous_km: number | null
-  current_km: number | null
-  liters: number | null
-  submitted_at: string | null
-  user_id: string | null
-  branch_id: string | null
-  vehicle_id: string | null
-  driver_id: string | null
-  total_amount: number | null
-  price_per_liter: number | null
-  fuel_station: string | null
-  created_at: string
-  updated_at: string
-}
 
 type AdminProfile = {
   id: string
   role: string
   active: boolean
 }
-
-type BranchRow = {
-  id: string
-  name: string
-  code: string
-  city: string
-  active: boolean
-}
-
-type IconType = ComponentType<{
-  className?: string
-}>
 
 // =====================================================
 // AUXILIARES
@@ -525,57 +485,14 @@ export default function AdminFuelPage() {
             INDICADORES
         ================================================= */}
 
-        <section className="grid grid-cols-2 gap-4 xl:grid-cols-3 2xl:grid-cols-6">
-
-          <StatCard
-            label="Abastecimentos"
-            value={String(
-              records.length
-            )}
-            icon={Fuel}
-          />
-
-          <StatCard
-            label="Bases"
-            value={String(
-              activeBranches
-            )}
-            icon={Building2}
-          />
-
-          <StatCard
-            label="Total gasto"
-            value={formatCurrency(
-              totalAmount
-            )}
-            icon={WalletCards}
-          />
-
-          <StatCard
-            label="Litros"
-            value={`${formatNumber(
-              totalLiters
-            )} L`}
-            icon={Droplets}
-          />
-
-          <StatCard
-            label="Preço médio"
-            value={`${formatCurrency(
-              averagePrice
-            )}/L`}
-            icon={Fuel}
-          />
-
-          <StatCard
-            label="KM percorrido"
-            value={`${formatNumber(
-              totalDistance
-            )} km`}
-            icon={Gauge}
-          />
-
-        </section>
+        <AdminFuelSummary
+          recordCount={records.length}
+          activeBranches={activeBranches}
+          totalAmount={totalAmount}
+          totalLiters={totalLiters}
+          averagePrice={averagePrice}
+          totalDistance={totalDistance}
+        />
 
         {/* =================================================
             BUSCA
@@ -681,178 +598,7 @@ export default function AdminFuelPage() {
                     : null
 
                 return (
-                  <article
-                    key={record.id}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 transition hover:border-zinc-700 sm:p-6"
-                  >
-
-                    {/* CABEÇALHO DO CARD */}
-
-                    <div className="flex items-start justify-between gap-4">
-
-                      <div className="flex items-start gap-3">
-
-                        <div className="rounded-xl bg-blue-500/10 p-3 text-blue-400">
-                          <Fuel className="h-5 w-5" />
-                        </div>
-
-                        <div>
-
-                          <p className="font-mono text-sm font-bold uppercase text-white">
-                            {record.vehicle_plate}
-                          </p>
-
-                          <p className="mt-1 text-sm text-zinc-500">
-                            {record.vehicle_model}
-                          </p>
-
-                        </div>
-
-                      </div>
-
-                      <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-400">
-                        {record.fuel_type}
-                      </span>
-
-                    </div>
-
-                    {/* BASE */}
-
-                    <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
-
-                      <div className="flex items-start gap-3">
-
-                        <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
-
-                        <div>
-
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">
-                            Base
-                          </p>
-
-                          <p className="mt-1 text-sm font-semibold text-zinc-300">
-                            {branch?.name ??
-                              'Base não identificada'}
-                          </p>
-
-                          {branch && (
-                            <p className="mt-1 text-xs text-zinc-500">
-                              {branch.city}
-                              {' • '}
-                              Código {branch.code}
-                            </p>
-                          )}
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                    {/* DADOS */}
-
-                    <div className="mt-5 grid gap-4 border-t border-zinc-800 pt-5 sm:grid-cols-2">
-
-                      <Info
-                        icon={UserRound}
-                        label="Motorista"
-                        value={
-                          record.driver ||
-                          'Não informado'
-                        }
-                      />
-
-                      <Info
-                        icon={MapPin}
-                        label="Posto"
-                        value={
-                          record.fuel_station ||
-                          'Não informado'
-                        }
-                      />
-
-                      <Info
-                        icon={Droplets}
-                        label="Litros"
-                        value={
-                          record.liters != null
-                            ? `${formatNumber(
-                                record.liters
-                              )} L`
-                            : 'Não informado'
-                        }
-                      />
-
-                      <Info
-                        icon={WalletCards}
-                        label="Valor total"
-                        value={
-                          record.total_amount != null
-                            ? formatCurrency(
-                                record.total_amount
-                              )
-                            : 'Não informado'
-                        }
-                      />
-
-                    </div>
-
-                    {/* MÉTRICAS */}
-
-                    <div className="mt-4 grid grid-cols-3 gap-3">
-
-                      <MetricBox
-                        label="KM anterior"
-                        value={
-                          record.previous_km != null
-                            ? `${record.previous_km.toLocaleString(
-                                'pt-BR'
-                              )} km`
-                            : '-'
-                        }
-                      />
-
-                      <MetricBox
-                        label="KM atual"
-                        value={
-                          record.current_km != null
-                            ? `${record.current_km.toLocaleString(
-                                'pt-BR'
-                              )} km`
-                            : '-'
-                        }
-                      />
-
-                      <MetricBox
-                        label="Consumo"
-                        value={
-                          consumption != null
-                            ? `${formatNumber(
-                                consumption
-                              )} km/L`
-                            : '-'
-                        }
-                      />
-
-                    </div>
-
-                    {/* DATA */}
-
-                    <div className="mt-4 border-t border-zinc-800 pt-4">
-
-                      <p className="text-xs text-zinc-500">
-                        Registrado em{' '}
-                        <span className="font-medium text-zinc-300">
-                          {formatDate(
-                            record.submitted_at ??
-                              record.created_at
-                          )}
-                        </span>
-                      </p>
-
-                    </div>
-
-                  </article>
+                  <AdminFuelRecordCard key={record.id} record={record} branch={branch} consumption={consumption} />
                 )
               }
             )}
@@ -864,162 +610,4 @@ export default function AdminFuelPage() {
       </div>
     </AppShell>
   )
-}
-
-// =====================================================
-// CARD DE INDICADOR
-// =====================================================
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-}: {
-  label: string
-  value: string
-  icon: IconType
-}) {
-  return (
-    <article className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
-
-      <div className="flex items-center justify-between gap-4">
-
-        <div className="min-w-0">
-
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-            {label}
-          </p>
-
-          <p className="mt-2 wrap-break-word text-xl font-bold text-white sm:text-2xl">
-            {value}
-          </p>
-
-        </div>
-
-        <div className="shrink-0 rounded-xl bg-blue-500/10 p-3 text-blue-400">
-          <Icon className="h-5 w-5" />
-        </div>
-
-      </div>
-
-    </article>
-  )
-}
-
-// =====================================================
-// INFORMAÇÃO
-// =====================================================
-
-function Info({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: IconType
-  label: string
-  value: string
-}) {
-  return (
-    <div className="flex items-start gap-3">
-
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" />
-
-      <div className="min-w-0">
-
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">
-          {label}
-        </p>
-
-        <p className="mt-1 wrap-break-word text-sm font-medium text-zinc-300">
-          {value}
-        </p>
-
-      </div>
-
-    </div>
-  )
-}
-
-// =====================================================
-// CAIXA DE MÉTRICA
-// =====================================================
-
-function MetricBox({
-  label,
-  value,
-}: {
-  label: string
-  value: string
-}) {
-  return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
-
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
-        {label}
-      </p>
-
-      <p className="mt-1 text-sm font-bold text-zinc-200">
-        {value}
-      </p>
-
-    </div>
-  )
-}
-
-// =====================================================
-// FORMATAÇÃO
-// =====================================================
-
-function formatCurrency(
-  value: number
-) {
-  return new Intl.NumberFormat(
-    'pt-BR',
-    {
-      style: 'currency',
-      currency: 'BRL',
-    }
-  ).format(
-    Number.isFinite(value)
-      ? value
-      : 0
-  )
-}
-
-function formatNumber(
-  value: number
-) {
-  return new Intl.NumberFormat(
-    'pt-BR',
-    {
-      maximumFractionDigits: 2,
-    }
-  ).format(
-    Number.isFinite(value)
-      ? value
-      : 0
-  )
-}
-
-function formatDate(
-  value: string
-) {
-  const date =
-    new Date(value)
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return 'Data não informada'
-  }
-
-  return new Intl.DateTimeFormat(
-    'pt-BR',
-    {
-      dateStyle: 'short',
-      timeStyle: 'short',
-    }
-  ).format(date)
 }
