@@ -23,6 +23,7 @@ import {
   Wrench,
 } from 'lucide-react'
 
+import { StatCard } from '@/components/StatCard'
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
 
@@ -498,24 +499,28 @@ export default function ManagerVehiclesPage() {
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
 
           <StatCard
+            variant="outlined"
             label="Total da base"
             value={totalVehicles}
             icon={Car}
           />
 
           <StatCard
+            variant="outlined"
             label="Ativos"
             value={activeVehicles}
             icon={Gauge}
           />
 
           <StatCard
+            variant="outlined"
             label="Em manutenção"
             value={maintenanceVehicles}
             icon={Wrench}
           />
 
           <StatCard
+            variant="outlined"
             label="Inativos"
             value={inactiveVehicles}
             icon={AlertTriangle}
@@ -759,42 +764,6 @@ type IconType =
 // =====================================================
 // STAT CARD
 // =====================================================
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-}: {
-  label: string
-  value: number
-  icon: IconType
-}) {
-  return (
-    <article className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
-
-      <div className="flex items-center justify-between gap-4">
-
-        <div>
-
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-            {label}
-          </p>
-
-          <p className="mt-2 text-3xl font-bold tracking-tight text-white">
-            {value}
-          </p>
-
-        </div>
-
-        <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-blue-400">
-          <Icon className="h-5 w-5" />
-        </div>
-
-      </div>
-
-    </article>
-  )
-}
 
 // =====================================================
 // INFO ROW

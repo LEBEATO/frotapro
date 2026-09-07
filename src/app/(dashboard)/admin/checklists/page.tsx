@@ -26,6 +26,7 @@ import {
   Wrench,
 } from 'lucide-react'
 
+import { StatCard } from '@/components/StatCard'
 import { AppShell } from '@/components/layout/AppShell'
 import { Toast, type ToastType } from '@/components/Toast'
 import { createClient } from '@/lib/supabase/client'
@@ -1054,42 +1055,6 @@ type IconType =
   ComponentType<{
     className?: string
   }>
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-}: {
-  label: string
-  value: number
-  icon: IconType
-}) {
-  return (
-    <article className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
-
-      <div className="flex items-center justify-between gap-4">
-
-        <div>
-
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-            {label}
-          </p>
-
-          <p className="mt-2 text-3xl font-bold text-white">
-            {value}
-          </p>
-
-        </div>
-
-        <div className="rounded-xl bg-blue-500/10 p-3 text-blue-400">
-          <Icon className="h-5 w-5" />
-        </div>
-
-      </div>
-
-    </article>
-  )
-}
 
 function Info({
   icon: Icon,
