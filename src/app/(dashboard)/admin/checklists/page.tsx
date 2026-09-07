@@ -17,7 +17,6 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Gauge,
-  Loader2,
   MapPin,
   RefreshCw,
   Search,
@@ -27,6 +26,8 @@ import {
 
 import { StatCard } from '@/components/StatCard'
 import { PageHeader } from '@/components/PageHeader'
+import { LoadingState } from '@/components/LoadingState'
+import { EmptyState } from '@/components/EmptyState'
 import { AppShell } from '@/components/layout/AppShell'
 import { Toast, type ToastType } from '@/components/Toast'
 import { createClient } from '@/lib/supabase/client'
@@ -718,36 +719,16 @@ export default function AdminChecklistsPage() {
 
         {loading ? (
 
-          <div className="flex min-h-64 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/60">
-
-            <div className="flex flex-col items-center gap-3">
-
-              <Loader2 className="h-7 w-7 animate-spin text-blue-400" />
-
-              <p className="text-sm text-zinc-500">
-                Carregando checklists...
-              </p>
-
-            </div>
-
-          </div>
+          <LoadingState message="Carregando checklists..." />
 
         ) : filteredChecklists.length ===
           0 ? (
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-10 text-center">
-
-            <ClipboardCheck className="mx-auto h-9 w-9 text-zinc-700" />
-
-            <p className="mt-3 font-medium text-zinc-300">
-              Nenhum checklist encontrado
-            </p>
-
-            <p className="mt-1 text-sm text-zinc-500">
-              Não existem registros para os filtros selecionados.
-            </p>
-
-          </div>
+          <EmptyState
+            title="Nenhum checklist encontrado"
+            description="Não existem registros para os filtros selecionados."
+            icon={ClipboardCheck}
+          />
 
         ) : (
 

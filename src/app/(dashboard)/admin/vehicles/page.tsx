@@ -27,6 +27,9 @@ import {
 import { StatCard } from '@/components/StatCard'
 import { PageHeader } from '@/components/PageHeader'
 import { InfoRow } from '@/components/InfoRow'
+import { ErrorState } from '@/components/ErrorState'
+import { LoadingState } from '@/components/LoadingState'
+import { EmptyState } from '@/components/EmptyState'
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
 
@@ -603,17 +606,10 @@ export default function AdminVehiclesPage() {
         ================================================= */}
 
         {errorMessage && (
-          <section className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
-
-            <p className="text-sm font-semibold text-red-400">
-              Erro
-            </p>
-
-            <p className="mt-1 text-xs text-red-300/80">
-              {errorMessage}
-            </p>
-
-          </section>
+          <ErrorState
+            title="Erro"
+            message={errorMessage}
+          />
         )}
 
         {successMessage && (
@@ -632,36 +628,15 @@ export default function AdminVehiclesPage() {
 
         {loading ? (
 
-          <div className="flex min-h-64 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/60">
-
-            <div className="flex flex-col items-center gap-3">
-
-              <Loader2 className="h-7 w-7 animate-spin text-blue-400" />
-
-              <p className="text-sm text-zinc-500">
-                Carregando veículos...
-              </p>
-
-            </div>
-
-          </div>
+          <LoadingState message="Carregando veículos..." />
 
         ) : filteredVehicles.length === 0 ? (
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-10 text-center">
-
-            <Car className="mx-auto h-9 w-9 text-zinc-700" />
-
-            <p className="mt-3 font-medium text-zinc-300">
-              Nenhum veículo encontrado
-            </p>
-
-            <p className="mt-1 text-sm text-zinc-500">
-              Nenhum registro corresponde aos filtros
-              informados.
-            </p>
-
-          </div>
+          <EmptyState
+            title="Nenhum veículo encontrado"
+            description="Nenhum registro corresponde aos filtros informados."
+            icon={Car}
+          />
 
         ) : (
 

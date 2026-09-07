@@ -14,7 +14,6 @@ import {
   Building2,
   Car,
   Gauge,
-  Loader2,
   Plus,
   RefreshCw,
   Search,
@@ -25,6 +24,8 @@ import {
 import { StatCard } from '@/components/StatCard'
 import { PageHeader } from '@/components/PageHeader'
 import { InfoRow } from '@/components/InfoRow'
+import { ErrorState } from '@/components/ErrorState'
+import { LoadingState } from '@/components/LoadingState'
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
 
@@ -532,17 +533,10 @@ export default function ManagerVehiclesPage() {
         ================================================= */}
 
         {errorMessage && (
-          <section className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
-
-            <p className="text-sm font-semibold text-red-400">
-              Erro ao carregar veículos
-            </p>
-
-            <p className="mt-1 text-xs text-red-300/80">
-              {errorMessage}
-            </p>
-
-          </section>
+          <ErrorState
+            title="Erro ao carregar veículos"
+            message={errorMessage}
+          />
         )}
 
         {/* =================================================
@@ -551,19 +545,7 @@ export default function ManagerVehiclesPage() {
 
         {loading ? (
 
-          <div className="flex min-h-64 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/60">
-
-            <div className="flex flex-col items-center gap-3">
-
-              <Loader2 className="h-7 w-7 animate-spin text-blue-400" />
-
-              <p className="text-sm text-zinc-500">
-                Carregando veículos da base...
-              </p>
-
-            </div>
-
-          </div>
+          <LoadingState message="Carregando veículos da base..." />
 
         ) : filteredVehicles.length === 0 ? (
 
