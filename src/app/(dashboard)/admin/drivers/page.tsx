@@ -27,6 +27,7 @@ import { ErrorState } from '@/components/ErrorState'
 import { LoadingState } from '@/components/LoadingState'
 import { SearchInput } from '@/components/SearchInput'
 import { FilterButton } from '@/components/FilterButton'
+import { Button } from '@/components/Button'
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
 
@@ -468,27 +469,18 @@ export default function AdminDriversPage() {
           backHref="/admin"
           backLabel="Voltar ao painel"
           actions={
-            <button
+            <Button
               type="button"
               onClick={() =>
                 void loadData()
               }
               disabled={loading}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+              loading={loading}
+              icon={RefreshCw}
+              loadingIcon={RefreshCw}
             >
-
-              <RefreshCw
-                className={[
-                  'h-4 w-4',
-                  loading
-                    ? 'animate-spin'
-                    : '',
-                ].join(' ')}
-              />
-
               Atualizar
-
-            </button>
+            </Button>
           }
         />
 
