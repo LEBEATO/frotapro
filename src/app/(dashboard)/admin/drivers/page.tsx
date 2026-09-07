@@ -8,10 +8,7 @@ import {
   type ComponentType,
 } from 'react'
 
-import Link from 'next/link'
-
 import {
-  ArrowLeft,
   Building2,
   Car,
   CheckCircle2,
@@ -27,6 +24,7 @@ import {
 } from 'lucide-react'
 
 import { StatCard } from '@/components/StatCard'
+import { PageHeader } from '@/components/PageHeader'
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
 
@@ -461,59 +459,36 @@ export default function AdminDriversPage() {
             CABEÇALHO
         ================================================= */}
 
-        <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-
-          <div className="flex items-start gap-3">
-
-            <Link
-              href="/admin"
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 transition hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
-              aria-label="Voltar ao painel"
+        <PageHeader
+          title="Motoristas"
+          description="Acompanhe motoristas, bases, localização e veículos atualmente atribuídos em toda a operação."
+          contextLabel="Administração global"
+          backHref="/admin"
+          backLabel="Voltar ao painel"
+          actions={
+            <button
+              type="button"
+              onClick={() =>
+                void loadData()
+              }
+              disabled={loading}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
 
-            <div>
+              <RefreshCw
+                className={[
+                  'h-4 w-4',
+                  loading
+                    ? 'animate-spin'
+                    : '',
+                ].join(' ')}
+              />
 
-              <p className="text-sm font-medium text-blue-400">
-                Administração global
-              </p>
+              Atualizar
 
-              <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">
-                Motoristas
-              </h1>
-
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-                Acompanhe motoristas, bases, localização e veículos atualmente atribuídos em toda a operação.
-              </p>
-
-            </div>
-
-          </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              void loadData()
-            }
-            disabled={loading}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-
-            <RefreshCw
-              className={[
-                'h-4 w-4',
-                loading
-                  ? 'animate-spin'
-                  : '',
-              ].join(' ')}
-            />
-
-            Atualizar
-
-          </button>
-
-        </section>
+            </button>
+          }
+        />
 
         {/* =================================================
             INDICADORES

@@ -11,7 +11,6 @@ import Link from 'next/link'
 
 import {
   AlertTriangle,
-  ArrowLeft,
   Building2,
   Car,
   Gauge,
@@ -24,6 +23,7 @@ import {
 } from 'lucide-react'
 
 import { StatCard } from '@/components/StatCard'
+import { PageHeader } from '@/components/PageHeader'
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
 
@@ -384,74 +384,51 @@ export default function ManagerVehiclesPage() {
             CABEÇALHO
         ================================================= */}
 
-        <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <PageHeader
+          title="Veículos da Base"
+          description="Cadastre e acompanhe somente os veículos da sua unidade. O acesso aos veículos de outras bases permanece bloqueado."
+          contextLabel={
+            branch
+              ? `${branch.name} • ${branch.city}`
+              : 'Minha base'
+          }
+          backHref="/manager"
+          backLabel="Voltar ao painel do gestor"
+          actionsAlign="center"
+          actions={
+            <div className="flex flex-col gap-2 sm:flex-row">
 
-          <div className="flex items-start gap-3">
+              <Link
+                href="/manager/vehicles/new"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500"
+              >
+                <Plus className="h-4 w-4" />
+                Novo veículo
+              </Link>
 
-            <Link
-              href="/manager"
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 transition hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
-              aria-label="Voltar ao painel do gestor"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
+              <button
+                type="button"
+                onClick={() =>
+                  void loadData()
+                }
+                disabled={loading}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={[
+                    'h-4 w-4',
+                    loading
+                      ? 'animate-spin'
+                      : '',
+                  ].join(' ')}
+                />
 
-            <div>
-
-              <p className="text-sm font-medium text-blue-400">
-                {branch
-                  ? `${branch.name} • ${branch.city}`
-                  : 'Minha base'}
-              </p>
-
-              <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">
-                Veículos da Base
-              </h1>
-
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-                Cadastre e acompanhe somente os veículos da sua unidade.
-                O acesso aos veículos de outras bases permanece bloqueado.
-              </p>
+                Atualizar
+              </button>
 
             </div>
-
-          </div>
-
-          {/* AÇÕES */}
-
-          <div className="flex flex-col gap-2 sm:flex-row">
-
-            <Link
-              href="/manager/vehicles/new"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500"
-            >
-              <Plus className="h-4 w-4" />
-              Novo veículo
-            </Link>
-
-            <button
-              type="button"
-              onClick={() =>
-                void loadData()
-              }
-              disabled={loading}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <RefreshCw
-                className={[
-                  'h-4 w-4',
-                  loading
-                    ? 'animate-spin'
-                    : '',
-                ].join(' ')}
-              />
-
-              Atualizar
-            </button>
-
-          </div>
-
-        </section>
+          }
+        />
 
         {/* =================================================
             BASE
