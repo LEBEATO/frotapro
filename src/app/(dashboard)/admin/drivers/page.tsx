@@ -16,7 +16,6 @@ import {
   Mail,
   MapPin,
   RefreshCw,
-  Search,
   UserRound,
   Users,
   UserX,
@@ -26,6 +25,8 @@ import { StatCard } from '@/components/StatCard'
 import { PageHeader } from '@/components/PageHeader'
 import { ErrorState } from '@/components/ErrorState'
 import { LoadingState } from '@/components/LoadingState'
+import { SearchInput } from '@/components/SearchInput'
+import { FilterButton } from '@/components/FilterButton'
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
 
@@ -563,10 +564,7 @@ export default function AdminDriversPage() {
 
           <div className="relative">
 
-            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-
-            <input
-              type="text"
+            <SearchInput
               value={search}
               onChange={(event) =>
                 setSearch(
@@ -574,7 +572,7 @@ export default function AdminDriversPage() {
                 )
               }
               placeholder="Buscar motorista, e-mail, placa, veículo, base, cidade ou estado..."
-              className="min-h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900/70 py-2.5 pl-10 pr-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              label="Buscar motoristas"
             />
 
           </div>
@@ -1025,30 +1023,7 @@ function VehicleStatus({
   )
 }
 
-function FilterButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        'min-h-11 rounded-xl border px-3 py-2 text-xs font-semibold transition sm:text-sm',
-        active
-          ? 'border-blue-500/40 bg-blue-500/10 text-blue-400'
-          : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200',
-      ].join(' ')}
-    >
-      {children}
-    </button>
-  )
-}
+
 
 // =====================================================
 // DATA
