@@ -28,6 +28,8 @@ import {
   WalletCards,
 } from 'lucide-react'
 
+import { Metric } from '@/components/Metric'
+import { formatCurrency, formatNumber, formatDateTime as formatDate } from '@/lib/formatters'
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
 
@@ -1929,28 +1931,6 @@ function StatCard({
   )
 }
 
-function Metric({
-  label,
-  value,
-}: {
-  label: string
-  value: string
-}) {
-  return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
-
-      <p className="text-xs text-zinc-500">
-        {label}
-      </p>
-
-      <p className="mt-2 text-sm font-semibold text-zinc-100 sm:text-base">
-        {value}
-      </p>
-
-    </div>
-  )
-}
-
 function EmptyState({
   message,
 }: {
@@ -1972,61 +1952,3 @@ function EmptyState({
 // =====================================================
 // FORMATAÇÃO
 // =====================================================
-
-function formatCurrency(
-  value: number
-) {
-  return new Intl.NumberFormat(
-    'pt-BR',
-    {
-      style: 'currency',
-      currency: 'BRL',
-    }
-  ).format(
-    Number.isFinite(value)
-      ? value
-      : 0
-  )
-}
-
-function formatNumber(
-  value: number,
-  digits = 2
-) {
-  return new Intl.NumberFormat(
-    'pt-BR',
-    {
-      minimumFractionDigits:
-        digits,
-      maximumFractionDigits:
-        digits,
-    }
-  ).format(
-    Number.isFinite(value)
-      ? value
-      : 0
-  )
-}
-
-function formatDate(
-  value: string
-) {
-  const date =
-    new Date(value)
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return '--'
-  }
-
-  return new Intl.DateTimeFormat(
-    'pt-BR',
-    {
-      dateStyle: 'short',
-      timeStyle: 'short',
-    }
-  ).format(date)
-}

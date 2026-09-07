@@ -26,6 +26,7 @@ import {
 
 import { StatCard } from '@/components/StatCard'
 import { PageHeader } from '@/components/PageHeader'
+import { InfoRow } from '@/components/InfoRow'
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
 
@@ -768,6 +769,7 @@ export default function AdminVehiclesPage() {
                     <div className="mt-5 space-y-3 border-t border-zinc-800 pt-4">
 
                       <InfoRow
+                        textOverflow="truncate"
                         icon={Gauge}
                         label="Quilometragem"
                         value={`${(
@@ -779,6 +781,7 @@ export default function AdminVehiclesPage() {
                       />
 
                       <InfoRow
+                        textOverflow="truncate"
                         icon={UserRound}
                         label="Motorista"
                         value={
@@ -788,6 +791,7 @@ export default function AdminVehiclesPage() {
                       />
 
                       <InfoRow
+                        textOverflow="truncate"
                         icon={Building2}
                         label="Base"
                         value={
@@ -798,6 +802,7 @@ export default function AdminVehiclesPage() {
                       />
 
                       <InfoRow
+                        textOverflow="truncate"
                         icon={MapPin}
                         label="Cidade / Estado"
                         value={
@@ -982,36 +987,6 @@ type IconType =
   ComponentType<{
     className?: string
   }>
-
-function InfoRow({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: IconType
-  label: string
-  value: string
-}) {
-  return (
-    <div className="flex items-start gap-3">
-
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" />
-
-      <div className="min-w-0">
-
-        <p className="text-[11px] uppercase tracking-wider text-zinc-600">
-          {label}
-        </p>
-
-        <p className="mt-0.5 truncate text-sm font-medium text-zinc-300">
-          {value}
-        </p>
-
-      </div>
-
-    </div>
-  )
-}
 
 function StatusInfo({
   icon: Icon,
