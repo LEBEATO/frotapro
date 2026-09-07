@@ -26,6 +26,8 @@ import { PageHeader } from '@/components/PageHeader'
 import { InfoRow } from '@/components/InfoRow'
 import { ErrorState } from '@/components/ErrorState'
 import { LoadingState } from '@/components/LoadingState'
+import { StatusBadge } from '@/components/StatusBadge'
+import { getVehicleStatusAppearance } from '@/lib/status'
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/client'
 
@@ -601,11 +603,7 @@ export default function ManagerVehiclesPage() {
                         <Car className="h-5 w-5" />
                       </div>
 
-                      <VehicleStatus
-                        status={
-                          vehicle.status
-                        }
-                      />
+                      <StatusBadge {...getVehicleStatusAppearance(vehicle.status)} />
 
                     </div>
 
@@ -718,38 +716,3 @@ export default function ManagerVehiclesPage() {
 // =====================================================
 // STATUS DO VEÍCULO
 // =====================================================
-
-function VehicleStatus({
-  status,
-}: {
-  status: string | null
-}) {
-  const value =
-    status ?? 'Ativo'
-
-  if (
-    value === 'Manutenção'
-  ) {
-    return (
-      <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-400">
-        Manutenção
-      </span>
-    )
-  }
-
-  if (
-    value === 'Inativo'
-  ) {
-    return (
-      <span className="rounded-full border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-xs font-medium text-zinc-400">
-        Inativo
-      </span>
-    )
-  }
-
-  return (
-    <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400">
-      Ativo
-    </span>
-  )
-}
