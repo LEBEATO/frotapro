@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { internalRedirect } from '@/lib/internal-redirect'
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
@@ -8,10 +9,7 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code')
   const next = requestUrl.searchParams.get('next')
 
-  const safeNext =
-    next && next.startsWith('/') && !next.startsWith('//')
-      ? next
-      : '/login'
+  const redirectTo = internalRedirect(next, request.url, '/login')
 
   if (!code) {
     return NextResponse.redirect(
@@ -51,6 +49,6 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.redirect(
-    new URL(safeNext, request.url)
+    redirectTo
   )
 }

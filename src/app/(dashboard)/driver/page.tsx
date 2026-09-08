@@ -205,7 +205,7 @@ export default function DriverPage() {
           | VehicleData
           | null = null
 
-        // 1. Estrutura oficial de atribuição.
+        // A fonte oficial é obrigatória; erro não significa ausência de vínculo.
 
         const {
           data: assignment,
@@ -216,7 +216,7 @@ export default function DriverPage() {
             'driver_vehicle_assignments'
           )
           .select(
-            'vehicle_id'
+            'vehicle_id, branch_id'
           )
           .eq(
             'driver_id',
@@ -228,25 +228,25 @@ export default function DriverPage() {
           )
           .maybeSingle()
 
-        if (
-          assignmentError
-        ) {
-          console.error(
-            'Erro ao buscar atribuição:',
-            assignmentError
-          )
+        if (assignmentError) {
+          console.error('Erro ao buscar atribuição:', assignmentError)
+          throw new Error('Não foi possível consultar sua atribuição ativa. Tente novamente.')
         }
 
-        if (
-          assignment?.vehicle_id
-        ) {
-          const {
-            data,
-            error,
-          } = await supabase
-            .from(
-              'vehicles'
-            )
+        if (assignment) {
+          if (!assignment.vehicle_id) {
+            throw new Error('A atribuição ativa não possui veículo válido.')
+          }
+
+          if (
+            !driverProfile.branch_id ||
+            assignment.branch_id !== driverProfile.branch_id
+          ) {
+            throw new Error('A atribuição ativa pertence a uma base diferente do motorista.')
+          }
+
+          const { data, error } = await supabase
+            .from('vehicles')
             .select(`
               id,
               model,
@@ -257,104 +257,23 @@ export default function DriverPage() {
               driver_id,
               current_branch_id
             `)
-            .eq(
-              'id',
-              assignment.vehicle_id
-            )
+            .eq('id', assignment.vehicle_id)
             .maybeSingle()
 
           if (error) {
-            console.error(
-              'Erro ao buscar veículo atribuído:',
-              error
-            )
-          } else if (data) {
-            vehicleData =
-              data as VehicleData
+            console.error('Erro ao buscar veículo atribuído:', error)
+            throw new Error('Não foi possível carregar o veículo da atribuição ativa. Tente novamente.')
           }
-        }
 
-        // ===============================================
-        // FALLBACK DRIVER_ID
-        // ===============================================
-
-        if (
-          !vehicleData
-        ) {
-          const {
-            data,
-            error,
-          } = await supabase
-            .from(
-              'vehicles'
-            )
-            .select(`
-              id,
-              model,
-              plate,
-              year,
-              status,
-              mileage,
-              driver_id,
-              current_branch_id
-            `)
-            .eq(
-              'driver_id',
-              user.id
-            )
-            .maybeSingle()
-
-          if (error) {
-            console.error(
-              'Erro no fallback por driver_id:',
-              error
-            )
-          } else if (data) {
-            vehicleData =
-              data as VehicleData
+          if (!data) {
+            throw new Error('Veículo da atribuição ativa não encontrado.')
           }
-        }
 
-        // ===============================================
-        // FALLBACK LEGADO POR EMAIL
-        // ===============================================
-
-        if (
-          !vehicleData &&
-          user.email
-        ) {
-          const {
-            data,
-            error,
-          } = await supabase
-            .from(
-              'vehicles'
-            )
-            .select(`
-              id,
-              model,
-              plate,
-              year,
-              status,
-              mileage,
-              driver_id,
-              current_branch_id
-            `)
-            .eq(
-              'driver_email',
-              user.email
-            )
-            .maybeSingle()
-
-          if (error) {
-            console.error(
-              'Erro no fallback por e-mail:',
-              error
-            )
-          } else if (data) {
-            vehicleData =
-              data as VehicleData
+          if (data.current_branch_id !== driverProfile.branch_id) {
+            throw new Error('O veículo atribuído pertence a uma base diferente do motorista.')
           }
+
+          vehicleData = data as VehicleData
         }
 
         setVehicle(

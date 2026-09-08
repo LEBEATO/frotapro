@@ -569,18 +569,7 @@ export default function ManagerFuelPage() {
       0
     )
 
-  const totalDistance =
-    records.reduce(
-      (
-        total,
-        record
-      ) =>
-        total +
-        calculateDistance(
-          record
-        ),
-      0
-    )
+
 
   const averagePrice =
     totalLiters > 0

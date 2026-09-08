@@ -2,6 +2,7 @@ import type { EmailOtpType } from '@supabase/supabase-js'
 import { type NextRequest, NextResponse } from 'next/server'
 
 import { createServerClientWithCookies } from '@/lib/supabase/server'
+import { internalRedirect } from '@/lib/internal-redirect'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -10,15 +11,12 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get('type') as EmailOtpType | null
   const next = searchParams.get('next')
 
-  // Evita redirecionamento para sites externos
-  const safeNext =
-    next && next.startsWith('/') && !next.startsWith('//')
-      ? next
-      : '/auth/accept-invite'
+  const redirectTo = internalRedirect(next, request.url, '/auth/accept-invite')
 
-  const redirectTo = request.nextUrl.clone()
-
-  redirectTo.pathname = safeNext
+  // Preserva parâmetros adicionais do convite, sem sobrescrever os do destino.
+  searchParams.forEach((value, key) => {
+    if (!redirectTo.searchParams.has(key)) redirectTo.searchParams.set(key, value)
+  })
 
   // Remove dados sensíveis da URL final
   redirectTo.searchParams.delete('token_hash')

@@ -1,5 +1,7 @@
 'use client'
 
+import { useId } from 'react'
+import { Modal } from '@/components/Modal'
 import { Metric } from '@/components/Metric'
 import { formatCurrency, formatNumber, formatDateTime as formatDate } from '@/lib/formatters'
 import type { VehicleFuelStat } from './types'
@@ -11,20 +13,17 @@ export function VehicleDetailsModal({
   stat: VehicleFuelStat
   onClose: () => void
 }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-      onMouseDown={onClose}
-    >
+  const titleId = useId()
+  const descriptionId = useId()
 
-      <div
-        className="w-full max-w-xl rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-2xl sm:p-6"
-        onMouseDown={(
-          event
-        ) =>
-          event.stopPropagation()
-        }
-      >
+  return (
+    <Modal
+      labelledBy={titleId}
+      describedBy={descriptionId}
+      onClose={onClose}
+      closeOnBackdrop
+      panelClassName="w-full max-w-xl rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-2xl sm:p-6"
+    >
 
         <div className="flex items-start justify-between gap-4">
 
@@ -34,11 +33,11 @@ export function VehicleDetailsModal({
               Histórico do veículo
             </p>
 
-            <h2 className="mt-1 text-xl font-bold text-white">
+            <h2 id={titleId} className="mt-1 text-xl font-bold text-white">
               {stat.vehicleModel}
             </h2>
 
-            <p className="mt-1 text-sm text-zinc-500">
+            <p id={descriptionId} className="mt-1 text-sm text-zinc-500">
               {stat.vehiclePlate}{' '}
               •{' '}
               {stat.fuelType}
@@ -137,9 +136,7 @@ export function VehicleDetailsModal({
 
         </div>
 
-      </div>
-
-    </div>
+    </Modal>
   )
 }
 
