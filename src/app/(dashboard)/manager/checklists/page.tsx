@@ -77,6 +77,11 @@ export default function ManagerChecklistsPage() {
   ] = useState<string[] | null>(null)
 
   const [
+    loadingPhotos,
+    setLoadingPhotos,
+  ] = useState(false)
+
+  const [
     toast,
     setToast,
   ] = useState<{
@@ -112,6 +117,64 @@ export default function ManagerChecklistsPage() {
     return Array.isArray(photos)
       ? photos
       : []
+  }
+
+  async function viewChecklistPhotos(
+    checklistId: string
+  ) {
+    setLoadingPhotos(true)
+
+    try {
+      const response = await fetch(
+        '/api/manager/checklists/photos',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            checklistId,
+          }),
+        }
+      )
+      const result = (await response.json()) as {
+        urls?: unknown
+        error?: string
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ??
+            'Não foi possível carregar as fotos.'
+        )
+      }
+
+      const urls = Array.isArray(result.urls)
+        ? result.urls.filter(
+            (url): url is string =>
+              typeof url === 'string'
+          )
+        : []
+
+      if (urls.length === 0) {
+        showToast(
+          'Nenhuma foto disponível para este checklist.',
+          'error'
+        )
+        return
+      }
+
+      setSelectedPhotos(urls)
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível carregar as fotos.',
+        'error'
+      )
+    } finally {
+      setLoadingPhotos(false)
+    }
   }
 
   function getRecordedMileage(
@@ -523,7 +586,10 @@ export default function ManagerChecklistsPage() {
   // =====================================================
 
   return (
-    <div className="min-h-screen bg-zinc-950 p-4 text-white md:p-8">
+    <div
+      className="min-h-screen bg-zinc-950 p-4 text-white md:p-8"
+      aria-busy={loadingPhotos}
+    >
 
       {/* TOAST */}
 
@@ -790,7 +856,9 @@ export default function ManagerChecklistsPage() {
                     itensNaoOk={itensNaoOk}
                     hasPendingMaintenance={hasPendingMaintenance}
                     recordedMileage={getRecordedMileage(item.observation)}
-                    onViewPhotos={() => setSelectedPhotos(checklistPhotos)}
+                    onViewPhotos={() =>
+                      void viewChecklistPhotos(item.id)
+                    }
                   />
                 )
               }

@@ -850,7 +850,7 @@ export default function DriverChecklistPage() {
       // UPLOAD DAS FOTOS
       // ===============================================
 
-      const uploadedPhotoUrls:
+      const uploadedPhotoKeys:
         string[] =
         []
 
@@ -899,21 +899,8 @@ export default function DriverChecklistPage() {
           )
         }
 
-        const {
-          data:
-            publicUrlData,
-        } =
-          supabase
-            .storage
-            .from(
-              'checklist-photos'
-            )
-            .getPublicUrl(
-              fileName
-            )
-
-        uploadedPhotoUrls.push(
-          publicUrlData.publicUrl
+        uploadedPhotoKeys.push(
+          fileName
         )
       }
 
@@ -1036,7 +1023,7 @@ export default function DriverChecklistPage() {
               observacaoFinal,
 
             photos:
-              uploadedPhotoUrls,
+              uploadedPhotoKeys,
           })
 
       if (
