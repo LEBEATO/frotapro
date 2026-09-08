@@ -1,23 +1,22 @@
 # ROADMAP — FrotaPro V1
 
-## Auditoria das etapas 17–20 — 07/09/2026
+## Auditoria das etapas 17–20 — 08/09/2026
 
 Relatório e matrizes: [AUDITORIA_PRODUCAO.md](AUDITORIA_PRODUCAO.md).
 
 - **CONCLUÍDO:** infraestrutura Modal e migração de ChecklistPhotosModal/VehicleDetailsModal; testes com DOM simulado. ConfirmModal preservado.
 - **CONCLUÍDO:** remoção da action create-vehicle e do módulo de schemas sem consumidores; remoção do agregado totalDistance não utilizado em manager/fuel.
 - **CONCLUÍDO:** auditoria estática das rotas, quatro APIs, quatro migrations e snapshot local; checkpoints de lint/build/TypeScript executados. Isto não certifica o banco aplicado.
-- **RESOLVIDO NO CÓDIGO S01:** dashboard usa somente assignment oficial; erro, múltiplos resultados, veículo ausente e base divergente exibem erro, ausência de assignment exibe estado sem veículo. Dez testes com mocks, lint e build passaram; integração real depende de S02.
-- **BLOQUEADOR S02:** RLS/grants/triggers/índices efetivos e isolamento entre bases/motoristas não comprovados; confirmar migrations aplicadas e executar testes negativos em homologação mediante autorização.
+- **RESOLVIDO S01:** dashboard usa somente o assignment oficial; falhas, múltiplos resultados, veículo ausente e base divergente não recorrem ao legado. A integração real foi coberta pelos testes de isolamento informados no fechamento de S02.
+- **RESOLVIDO S02:** RLS, isolamento entre motoristas e bases, grants estruturais, tabelas legadas, assignments, checklist, fuel, manutenção e Storage privado foram confirmados no banco real. Fotos de `checklist-photos` foram testadas na Vercel antes e depois do bucket privado.
 - **RESOLVIDO NO CÓDIGO S03:** callback/confirm usam internalRedirect, validam caminhos ambíguos e origem normalizada; oito testes locais passaram, além de lint/build.
 - **RESOLVIDO S04:** somente ws transitivo atualizado de 8.20.0 para 8.21.3, compatível com realtime-js; package.json preservado, audit de produção sem vulnerabilidades, lint/build aprovados.
-- **S05 CONFIRMADO PELO USUÁRIO:** correção aplicada e confirmada no banco, conforme relato no pedido S02. O agente não reaplicou nem executou SQL.
-- **S02 EM PREPARAÇÃO:** [S02_SEGURANCA.md](S02_SEGURANCA.md) contém matriz com lacunas explícitas, inventário de consumidores e dez testes negativos. Três migrations locais propostas: isolamento de legados, guard de upload e revokes estruturais. Nenhuma aplicada; leitura pública de fotos e prova de isolamento continuam bloqueadores. Resultado completo da auditoria real solicitado para completar policies/grants por operação.
-- **PREPARADO S02:** supabase/audits/production-read-only.sql reúne catálogo de RLS, policies, grants, funções, triggers, índices e Storage. Não executado; aguarda resultado do banco real e testes de isolamento.
-- **PENDENTE:** testes reais de auth, quatro roles, assignments concorrentes, checklist com avaria, combustível, manutenção/liberação e Storage.
+- **RESOLVIDO S05:** `transition_maintenance_record` rejeita `p_action` nulo ou inválido; comportamento confirmado no banco real.
+- **TESTES REAIS S02:** passaram isolamento de motoristas e bases, acesso anônimo, escrita cross-branch, assignments, checklist, fuel, manutenção e fotos privadas. Nenhuma tabela ou dado foi apagado.
+- **PENDENTE MANUAL:** auth e quatro roles em navegador, fluxos completos, concorrência, UX responsiva, acessibilidade, ambiente de produção e deploy.
 - **PENDENTE:** navegador mobile/tablet/desktop, teclado, leitor de tela, contraste, foco e sobreposição de modais; validação do ambiente Vercel, redirects, SMTP e backup.
 - **DÍVIDA TÉCNICA:** modal de assignments e menu mobile sem infraestrutura completa de foco; busca sem label em manager/checklists; README desatualizado; validação manual em APIs; aliases de roles; DeleteVehicleModal sem consumidores.
-- **DECISÃO:** NÃO PRONTO PARA PRODUÇÃO. Nenhum SQL, migration, alteração de grants/RLS ou deploy executado nesta auditoria.
+- **DECISÃO:** PRONTO COM TESTES MANUAIS PENDENTES. Esta atualização não executou SQL, não alterou migrations, RLS ou código da aplicação, e não fez deploy.
 
 Legenda:
 
