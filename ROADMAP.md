@@ -1,22 +1,34 @@
-# ROADMAP — FrotaPro V1
+ROADMAP — FrotaPro V1
 
-## Auditoria das etapas 17–20 — 08/09/2026
+Auditoria das etapas 17–20 — 08/09/2026
 
-Relatório e matrizes: [AUDITORIA_PRODUCAO.md](AUDITORIA_PRODUCAO.md).
+Relatório e matrizes: AUDITORIA_PRODUCAO.md.
 
-- **CONCLUÍDO:** infraestrutura Modal e migração de ChecklistPhotosModal/VehicleDetailsModal; testes com DOM simulado. ConfirmModal preservado.
-- **CONCLUÍDO:** remoção da action create-vehicle e do módulo de schemas sem consumidores; remoção do agregado totalDistance não utilizado em manager/fuel.
-- **CONCLUÍDO:** auditoria estática das rotas, quatro APIs, quatro migrations e snapshot local; checkpoints de lint/build/TypeScript executados. Isto não certifica o banco aplicado.
-- **RESOLVIDO S01:** dashboard usa somente o assignment oficial; falhas, múltiplos resultados, veículo ausente e base divergente não recorrem ao legado. A integração real foi coberta pelos testes de isolamento informados no fechamento de S02.
-- **RESOLVIDO S02:** RLS, isolamento entre motoristas e bases, grants estruturais, tabelas legadas, assignments, checklist, fuel, manutenção e Storage privado foram confirmados no banco real. Fotos de `checklist-photos` foram testadas na Vercel antes e depois do bucket privado.
-- **RESOLVIDO NO CÓDIGO S03:** callback/confirm usam internalRedirect, validam caminhos ambíguos e origem normalizada; oito testes locais passaram, além de lint/build.
-- **RESOLVIDO S04:** somente ws transitivo atualizado de 8.20.0 para 8.21.3, compatível com realtime-js; package.json preservado, audit de produção sem vulnerabilidades, lint/build aprovados.
-- **RESOLVIDO S05:** `transition_maintenance_record` rejeita `p_action` nulo ou inválido; comportamento confirmado no banco real.
-- **TESTES REAIS S02:** passaram isolamento de motoristas e bases, acesso anônimo, escrita cross-branch, assignments, checklist, fuel, manutenção e fotos privadas. Nenhuma tabela ou dado foi apagado.
-- **PENDENTE MANUAL:** auth e quatro roles em navegador, fluxos completos, concorrência, UX responsiva, acessibilidade, ambiente de produção e deploy.
-- **PENDENTE:** navegador mobile/tablet/desktop, teclado, leitor de tela, contraste, foco e sobreposição de modais; validação do ambiente Vercel, redirects, SMTP e backup.
-- **DÍVIDA TÉCNICA:** modal de assignments e menu mobile sem infraestrutura completa de foco; busca sem label em manager/checklists; README desatualizado; validação manual em APIs; aliases de roles; DeleteVehicleModal sem consumidores.
-- **DECISÃO:** PRONTO COM TESTES MANUAIS PENDENTES. Esta atualização não executou SQL, não alterou migrations, RLS ou código da aplicação, e não fez deploy.
+CONCLUÍDO: infraestrutura Modal e migração de ChecklistPhotosModal/VehicleDetailsModal; testes com DOM simulado. ConfirmModal preservado.
+
+CONCLUÍDO: remoção da action create-vehicle e do módulo de schemas sem consumidores; remoção do agregado totalDistance não utilizado em manager/fuel.
+
+CONCLUÍDO: auditoria estática das rotas, quatro APIs, quatro migrations e snapshot local; checkpoints de lint/build/TypeScript executados. Isto não certifica o banco aplicado.
+
+RESOLVIDO S01: dashboard usa somente o assignment oficial; falhas, múltiplos resultados, veículo ausente e base divergente não recorrem ao legado. A integração real foi coberta pelos testes de isolamento informados no fechamento de S02.
+
+RESOLVIDO S02: RLS, isolamento entre motoristas e bases, grants estruturais, tabelas legadas, assignments, checklist, fuel, manutenção e Storage privado foram confirmados no banco real. Fotos de checklist-photos foram testadas na Vercel antes e depois do bucket privado.
+
+RESOLVIDO NO CÓDIGO S03: callback/confirm usam internalRedirect, validam caminhos ambíguos e origem normalizada; oito testes locais passaram, além de lint/build.
+
+RESOLVIDO S04: somente ws transitivo atualizado de 8.20.0 para 8.21.3, compatível com realtime-js; package.json preservado, audit de produção sem vulnerabilidades, lint/build aprovados.
+
+RESOLVIDO S05: transition_maintenance_record rejeita p_action nulo ou inválido; comportamento confirmado no banco real.
+
+TESTES REAIS S02: passaram isolamento de motoristas e bases, acesso anônimo, escrita cross-branch, assignments, checklist, fuel, manutenção e fotos privadas. Nenhuma tabela ou dado foi apagado.
+
+PENDENTE MANUAL: auth e quatro roles em navegador, fluxos completos, concorrência, UX responsiva, acessibilidade, ambiente de produção e deploy.
+
+PENDENTE: navegador mobile/tablet/desktop, teclado, leitor de tela, contraste, foco e sobreposição de modais; validação do ambiente Vercel, redirects, SMTP e backup.
+
+DÍVIDA TÉCNICA: modal de assignments e menu mobile sem infraestrutura completa de foco; busca sem label em manager/checklists; validação manual em APIs; aliases de roles; DeleteVehicleModal sem consumidores. README atualizado após esta auditoria.
+
+DECISÃO: PRONTO COM TESTES MANUAIS PENDENTES. Esta atualização não executou SQL, não alterou migrations, RLS ou código da aplicação, e não fez deploy.
 
 Legenda:
 
@@ -25,9 +37,7 @@ Legenda:
 ⬜ pendente
 🚫 fora da V1
 
----
-
-# FASE 0 — Estado atual
+FASE 0 — Estado atual
 
 ✅ Projeto Next.js configurado
 
@@ -47,9 +57,7 @@ Legenda:
 
 ✅ branch de evolução enterprise criada
 
----
-
-# FASE 1 — Fundação Enterprise
+FASE 1 — Fundação Enterprise
 
 🟡 Revisar arquitetura atual
 
@@ -73,18 +81,19 @@ Legenda:
 
 ⬜ Revisar empty states
 
----
-
-# FASE 2 — Papéis e autorização
+FASE 2 — Papéis e autorização
 
 ✅ Estrutura inicial de roles existente
 
 Roles oficiais:
 
-- admin
-- fleet_manager
-- branch_manager
-- driver
+admin
+
+fleet_manager
+
+branch_manager
+
+driver
 
 ⬜ Auditar todas as páginas por role
 
@@ -100,9 +109,7 @@ Roles oficiais:
 
 ⬜ Remover referências ao papel mechanic onde estiverem obsoletas
 
----
-
-# FASE 3 — Estados e bases
+FASE 3 — Estados e bases
 
 🟡 Estrutura de bases já iniciada
 
@@ -126,9 +133,7 @@ Roles oficiais:
 
 ⬜ Garantir segregação de dados
 
----
-
-# FASE 4 — Motoristas
+FASE 4 — Motoristas
 
 ✅ Cadastro inicial existente
 
@@ -162,9 +167,7 @@ Roles oficiais:
 
 ⬜ permissões server-side completas
 
----
-
-# FASE 5 — Veículos
+FASE 5 — Veículos
 
 ✅ cadastro de veículo existente
 
@@ -200,9 +203,7 @@ Roles oficiais:
 
 ⬜ validação de quilometragem
 
----
-
-# FASE 6 — Painel do motorista
+FASE 6 — Painel do motorista
 
 ✅ painel inicial existe
 
@@ -232,9 +233,7 @@ Roles oficiais:
 
 ⬜ mensagens claras quando não houver veículo associado
 
----
-
-# FASE 7 — Checklist diário
+FASE 7 — Checklist diário
 
 ✅ checklist já possui implementação
 
@@ -274,9 +273,7 @@ Roles oficiais:
 
 ⬜ histórico
 
----
-
-# FASE 8 — Combustível
+FASE 8 — Combustível
 
 ✅ módulo inicial criado
 
@@ -322,9 +319,7 @@ Roles oficiais:
 
 🚫 foto obrigatória do abastecimento
 
----
-
-# FASE 9 — Manutenção
+FASE 9 — Manutenção
 
 ✅ estrutura inicial existe
 
@@ -364,9 +359,7 @@ Roles oficiais:
 
 ⬜ alertas
 
----
-
-# FASE 10 — Transferências
+FASE 10 — Transferências
 
 ⬜ tabela/estrutura de histórico de transferências
 
@@ -388,9 +381,7 @@ Roles oficiais:
 
 ⬜ preservar histórico
 
----
-
-# FASE 11 — Dashboard do gestor
+FASE 11 — Dashboard do gestor
 
 ✅ painel principal do gestor existente
 
@@ -422,9 +413,7 @@ Roles oficiais:
 
 ⬜ responsividade completa
 
----
-
-# FASE 12 — Dashboard global / Fleet Manager
+FASE 12 — Dashboard global / Fleet Manager
 
 ⬜ visão nacional
 
@@ -450,9 +439,7 @@ Roles oficiais:
 
 ⬜ alertas globais
 
----
-
-# FASE 13 — Histórico e auditoria
+FASE 13 — Histórico e auditoria
 
 ⬜ definir estrutura de audit log
 
@@ -474,9 +461,7 @@ Roles oficiais:
 
 ⬜ tela de auditoria para perfil autorizado
 
----
-
-# FASE 14 — Alertas
+FASE 14 — Alertas
 
 ⬜ checklist pendente
 
@@ -494,9 +479,7 @@ Roles oficiais:
 
 ⬜ alertas no dashboard
 
----
-
-# FASE 15 — Banco e RLS
+FASE 15 — Banco e RLS
 
 🟡 Supabase já possui estrutura e políticas
 
@@ -540,9 +523,7 @@ Roles oficiais:
 
 ⬜ impedir acesso cruzado entre bases
 
----
-
-# FASE 16 — Segurança da aplicação
+FASE 16 — Segurança da aplicação
 
 ⬜ revisar autenticação
 
@@ -564,9 +545,7 @@ Roles oficiais:
 
 ⬜ autorização independente do frontend
 
----
-
-# FASE 17 — UX profissional
+FASE 17 — UX profissional
 
 ⬜ desktop
 
@@ -598,9 +577,7 @@ Roles oficiais:
 
 ⬜ acessibilidade
 
----
-
-# FASE 18 — Indicadores
+FASE 18 — Indicadores
 
 ⬜ consumo médio por veículo
 
@@ -620,9 +597,7 @@ Roles oficiais:
 
 ⬜ evolução por período
 
----
-
-# FASE 19 — Inteligência Artificial
+FASE 19 — Inteligência Artificial
 
 Somente iniciar depois dos dados e indicadores estarem confiáveis.
 
@@ -640,9 +615,7 @@ Somente iniciar depois dos dados e indicadores estarem confiáveis.
 
 ⬜ evitar decisões automáticas de alto impacto
 
----
-
-# FASE 20 — Testes e qualidade
+FASE 20 — Testes e qualidade
 
 ⬜ lint sem erros
 
@@ -687,21 +660,19 @@ gestor
 gestor
 → transferências
 
----
+FASE 21 — Produção
 
-# FASE 21 — Produção
-
-⬜ revisar README
+✅ revisar README
 
 ⬜ remover documentação antiga
 
-⬜ README refletir Next.js 16
+✅ README refletir Next.js 16
 
-⬜ retirar referência a mechanic como role ativo
+✅ retirar referência a mechanic como role ativo no README
 
-⬜ documentação de instalação
+✅ documentação de instalação local no README
 
-⬜ documentação Supabase
+🟡 documentação inicial de variáveis e migrations Supabase no README; falta procedimento operacional de implantação
 
 ⬜ configurar ambientes
 
@@ -717,9 +688,7 @@ gestor
 
 ⬜ release V1
 
----
-
-# FORA DA V1
+FORA DA V1
 
 🚫 Stripe
 
@@ -737,9 +706,7 @@ gestor
 
 Esses itens somente poderão entrar após aprovação futura.
 
----
-
-# REGRA DE EXECUÇÃO DO CODEX
+REGRA DE EXECUÇÃO DO CODEX
 
 O Codex deve trabalhar seguindo este roadmap.
 
@@ -747,13 +714,20 @@ Não executar todas as fases de uma só vez.
 
 Para cada tarefa:
 
-1. localizar o primeiro item relevante pendente;
-2. analisar código existente;
-3. implementar de forma incremental;
-4. executar lint;
-5. executar build;
-6. atualizar este ROADMAP.md apenas se a tarefa realmente estiver concluída;
-7. informar o que foi feito;
-8. sugerir o próximo item.
+localizar o primeiro item relevante pendente;
+
+analisar código existente;
+
+implementar de forma incremental;
+
+executar lint;
+
+executar build;
+
+atualizar este ROADMAP.md apenas se a tarefa realmente estiver concluída;
+
+informar o que foi feito;
+
+sugerir o próximo item.
 
 Nunca marcar como ✅ algo que não tenha sido implementado e validado.
