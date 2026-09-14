@@ -211,16 +211,13 @@ export async function proxy(
 
   // =====================================================
   // /manager
-  // branch_manager ou gestão global
+  // somente branch_manager
   // =====================================================
 
   if (
     pathname.startsWith('/manager')
   ) {
-    if (
-      !isBranchManager &&
-      !isGlobalManager
-    ) {
+    if (!isBranchManager) {
       redirectUrl.pathname = home
       redirectUrl.search = ''
 
