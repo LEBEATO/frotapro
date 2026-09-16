@@ -72,16 +72,9 @@ const initialForm: FuelForm = {
 }
 
 function parseNumber(value: string): number {
-  const normalized = value
-    .trim()
-    .replace(/\./g, '')
-    .replace(',', '.')
+  const number = Number(value.trim().replace(',', '.'))
 
-  const number = Number(normalized)
-
-  return Number.isFinite(number)
-    ? number
-    : 0
+  return Number.isFinite(number) ? number : 0
 }
 
 export default function DriverFuelPage() {
