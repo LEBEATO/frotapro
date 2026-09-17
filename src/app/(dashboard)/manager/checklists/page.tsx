@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ManagerChecklistCard } from '@/components/checklists/ManagerChecklistCard'
 import { ChecklistPhotosModal } from '@/components/checklists/ChecklistPhotosModal'
 import type { Checklist, ChecklistItem } from '@/components/checklists/types'
+import type { MaintenanceStatus } from '@/components/maintenance/types'
 
 import { createClient } from '@/lib/supabase/client'
 import { Toast, ToastType } from '@/components/Toast'
@@ -46,6 +47,11 @@ interface BranchData {
   states: StateData | StateData[] | null
 }
 
+interface MaintenanceLink {
+  source_checklist_id: string | null
+  status: MaintenanceStatus | null
+}
+
 // =====================================================
 // PÁGINA
 // =====================================================
@@ -58,6 +64,13 @@ export default function ManagerChecklistsPage() {
 
   const [checklists, setChecklists] =
     useState<Checklist[]>([])
+
+  const [
+    maintenanceStatusByChecklist,
+    setMaintenanceStatusByChecklist,
+  ] = useState<
+    Record<string, MaintenanceStatus | null>
+  >({})
 
   const [branch, setBranch] =
     useState<BranchData | null>(null)
@@ -421,7 +434,51 @@ export default function ManagerChecklistsPage() {
         )
 
       // ===============================================
-      // 6. CHECKLISTS COM AVARIA PRIMEIRO
+      // 6. SITUAÇÃO DA MANUTENÇÃO DE CADA CHECKLIST
+      // ===============================================
+
+      const maintenanceStatusMap: Record<
+        string,
+        MaintenanceStatus | null
+      > = {}
+
+      if (latestByPlate.length > 0) {
+        const {
+          data: maintenanceData,
+          error: maintenanceError,
+        } = await supabase
+          .from('maintenance_records')
+          .select(`
+            source_checklist_id,
+            status
+          `)
+          .eq('branch_id', branchId)
+          .in(
+            'source_checklist_id',
+            latestByPlate.map(
+              (checklist) => checklist.id
+            )
+          )
+
+        if (maintenanceError) {
+          throw maintenanceError
+        }
+
+        for (const maintenance of (
+          maintenanceData ?? []
+        ) as MaintenanceLink[]) {
+          if (
+            maintenance.source_checklist_id
+          ) {
+            maintenanceStatusMap[
+              maintenance.source_checklist_id
+            ] = maintenance.status
+          }
+        }
+      }
+
+      // ===============================================
+      // 7. CHECKLISTS COM AVARIA PRIMEIRO
       // ===============================================
 
       latestByPlate.sort(
@@ -451,6 +508,10 @@ export default function ManagerChecklistsPage() {
 
       setChecklists(
         latestByPlate
+      )
+
+      setMaintenanceStatusByChecklist(
+        maintenanceStatusMap
       )
     } catch (
       err: unknown
@@ -842,11 +903,6 @@ export default function ManagerChecklistsPage() {
                         check.name
                     )
 
-                const hasPendingMaintenance =
-                  itensNaoOk.length >
-                    0 ||
-                  item.has_issue
-
                 return (
                   <ManagerChecklistCard
                     key={item.id}
@@ -854,7 +910,11 @@ export default function ManagerChecklistsPage() {
                     checklistItems={checklistItems}
                     checklistPhotos={checklistPhotos}
                     itensNaoOk={itensNaoOk}
-                    hasPendingMaintenance={hasPendingMaintenance}
+                    maintenanceStatus={
+                      maintenanceStatusByChecklist[
+                        item.id
+                      ] ?? null
+                    }
                     recordedMileage={getRecordedMileage(item.observation)}
                     onViewPhotos={() =>
                       void viewChecklistPhotos(item.id)

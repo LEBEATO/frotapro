@@ -3,13 +3,14 @@
 import Link from 'next/link'
 import { AlertTriangle, Calendar, Car, CheckCircle2, Image as ImageIcon, Mail, User, Wrench, X } from 'lucide-react'
 import type { Checklist, ChecklistItem } from './types'
+import type { MaintenanceStatus } from '@/components/maintenance/types'
 
 interface ManagerChecklistCardProps {
   item: Checklist
   checklistItems: ChecklistItem[]
   checklistPhotos: string[]
   itensNaoOk: string[]
-  hasPendingMaintenance: boolean
+  maintenanceStatus: MaintenanceStatus | null
   recordedMileage: string | null
   onViewPhotos: () => void
 }
@@ -19,10 +20,22 @@ export function ManagerChecklistCard({
   checklistItems,
   checklistPhotos,
   itensNaoOk,
-  hasPendingMaintenance,
+  maintenanceStatus,
   recordedMileage,
   onViewPhotos,
 }: ManagerChecklistCardProps) {
+  const hasOccurrence =
+    itensNaoOk.length > 0 || item.has_issue
+
+  const isOpenMaintenance =
+    maintenanceStatus === 'pending' ||
+    maintenanceStatus === 'in_progress'
+
+  const occurrenceDescription =
+    itensNaoOk.length > 0
+      ? itensNaoOk.join(', ')
+      : 'Ocorrência informada pelo motorista'
+
   return (
     <div
       className={`flex flex-col justify-between space-y-4 rounded-2xl border bg-zinc-900 p-5 transition hover:border-zinc-700 ${
@@ -195,35 +208,62 @@ export function ManagerChecklistCard({
           </div>
         )}
 
-        {/* PENDÊNCIAS */}
+        {/* SITUAÇÃO DA OCORRÊNCIA */}
 
-        {hasPendingMaintenance && (
-          <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3">
+        {hasOccurrence && (
+          <div
+            className={`mt-3 rounded-xl border p-3 ${
+              maintenanceStatus === 'completed'
+                ? 'border-emerald-500/20 bg-emerald-500/10'
+                : maintenanceStatus === 'cancelled'
+                  ? 'border-zinc-700 bg-zinc-800/60'
+                  : 'border-red-500/20 bg-red-500/10'
+            }`}
+          >
 
-            <p className="flex items-start gap-1 text-xs font-medium text-red-400">
+            <p
+              className={`flex items-start gap-1 text-xs font-medium ${
+                maintenanceStatus === 'completed'
+                  ? 'text-emerald-400'
+                  : maintenanceStatus === 'cancelled'
+                    ? 'text-zinc-400'
+                    : 'text-red-400'
+              }`}
+            >
 
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {maintenanceStatus === 'completed' ? (
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              ) : maintenanceStatus === 'cancelled' ? (
+                <X className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              )}
 
               <span>
-                Pendências:{' '}
+                {maintenanceStatus === 'completed'
+                  ? 'Manutenção concluída: '
+                  : maintenanceStatus === 'in_progress'
+                    ? 'Manutenção em andamento: '
+                    : maintenanceStatus === 'pending'
+                      ? 'Manutenção pendente: '
+                      : maintenanceStatus === 'cancelled'
+                        ? 'Manutenção cancelada: '
+                        : 'Ocorrência registrada: '}
 
-                {itensNaoOk.length >
-                0
-                  ? itensNaoOk.join(
-                      ', '
-                    )
-                  : 'Ocorrência informada pelo motorista'}
+                {occurrenceDescription}
               </span>
 
             </p>
 
-            <Link
-              href="/maintenance"
-              className="mt-3 flex w-full items-center justify-center gap-1 rounded-lg bg-amber-600 py-2 text-xs font-semibold text-white transition hover:bg-amber-500"
-            >
-              <Wrench className="h-3.5 w-3.5" />
-              Acompanhar na manutenção
-            </Link>
+            {isOpenMaintenance && (
+              <Link
+                href="/maintenance"
+                className="mt-3 flex w-full items-center justify-center gap-1 rounded-lg bg-amber-600 py-2 text-xs font-semibold text-white transition hover:bg-amber-500"
+              >
+                <Wrench className="h-3.5 w-3.5" />
+                Acompanhar na manutenção
+              </Link>
+            )}
 
           </div>
         )}
