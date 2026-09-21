@@ -177,6 +177,8 @@ FASE 4 — Motoristas
 
 ✅ reenvio de convite existente
 
+✅ reenvio protegido por intervalo de 5 minutos e limite de 3 tentativas em 24 horas
+
 🟡 gestão de motoristas existente
 
 ⬜ revisão completa do formulário

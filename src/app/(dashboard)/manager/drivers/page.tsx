@@ -135,6 +135,21 @@ export default function ManagerDriversPage() {
   const [resendingId, setResendingId] =
     useState<string | null>(null)
 
+  const [inviteCooldowns, setInviteCooldowns] = useState<Record<string, number>>({})
+
+  const [clock, setClock] = useState(() => Date.now())
+
+  useEffect(() => {
+    const hasActiveCooldown = Object.values(inviteCooldowns).some(
+      (expiresAt) => expiresAt > Date.now()
+    )
+
+    if (!hasActiveCooldown) return
+
+    const timer = window.setInterval(() => setClock(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [inviteCooldowns])
+
   // =====================================================
   // CARREGAR DADOS
   // =====================================================
@@ -638,7 +653,16 @@ export default function ManagerDriversPage() {
         (await response.json()) as {
           message?: string
           error?: string
+          retryAfterSeconds?: number
+          remainingAttempts?: number
         }
+
+      if (data.retryAfterSeconds) {
+        setInviteCooldowns((current) => ({
+          ...current,
+          [driver.id]: Date.now() + data.retryAfterSeconds! * 1000,
+        }))
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -648,8 +672,7 @@ export default function ManagerDriversPage() {
       }
 
       setSuccessMessage(
-        data.message ??
-          `Convite reenviado para ${driver.email}.`
+        `${data.message ?? `Convite reenviado para ${driver.email}.`} ${data.remainingAttempts ?? 0} reenvio(s) restante(s) nas próximas 24 horas.`
       )
     } catch (error) {
       setErrorMessage(
@@ -853,12 +876,16 @@ export default function ManagerDriversPage() {
                     driver.id
                   )
 
-                const vehicle =
+              const vehicle =
                   assignment
                     ? vehicleMap.get(
                         assignment.vehicle_id
                       )
-                    : null
+                : null
+              const inviteSecondsRemaining = Math.max(
+                0,
+                Math.ceil(((inviteCooldowns[driver.id] ?? 0) - clock) / 1000)
+              )
 
                 return (
                   <article
@@ -974,7 +1001,7 @@ export default function ManagerDriversPage() {
                         }
                         disabled={
                           resendingId ===
-                          driver.id
+                          driver.id || inviteSecondsRemaining > 0
                         }
                         className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-zinc-800 px-4 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-50"
                       >
@@ -985,7 +1012,9 @@ export default function ManagerDriversPage() {
                           <Mail className="h-4 w-4" />
                         )}
 
-                        Reenviar convite
+                        {inviteSecondsRemaining > 0
+                          ? `Reenviar em ${Math.floor(inviteSecondsRemaining / 60)}:${String(inviteSecondsRemaining % 60).padStart(2, '0')}`
+                          : 'Reenviar convite'}
                       </button>
 
                     </div>
