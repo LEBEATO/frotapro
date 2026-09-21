@@ -395,25 +395,25 @@ FASE 9 — Manutenção
 
 FASE 10 — Transferências
 
-⬜ tabela/estrutura de histórico de transferências
+🟡 tabela/estrutura de histórico de transferências versionada; aplicação no banco real pendente
 
-⬜ motorista entre bases
+🟡 motorista entre bases implementado no código; aplicação e teste real pendentes
 
 ⬜ motorista entre estados
 
-⬜ veículo entre bases
+🟡 veículo entre bases implementado no código; aplicação e teste real pendentes
 
 ⬜ motorista trocando de veículo
 
-⬜ registrar origem
+✅ registrar origem
 
-⬜ registrar destino
+✅ registrar destino
 
-⬜ registrar usuário responsável
+✅ registrar usuário responsável
 
-⬜ registrar data
+✅ registrar data
 
-⬜ preservar histórico
+✅ preservar histórico
 
 FASE 11 — Dashboard do gestor
 

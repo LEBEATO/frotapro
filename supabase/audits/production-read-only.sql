@@ -8,7 +8,8 @@ requested(schema_name, table_name) as (
     ('public', 'profiles'), ('public', 'branches'), ('public', 'vehicles'),
     ('public', 'driver_vehicle_assignments'), ('public', 'driver_checklists'),
     ('public', 'fuel_records'), ('public', 'maintenance_records'),
-    ('public', 'maintenance_releases'), ('public', 'vehicle_fuel_consumption_stats'),
+    ('public', 'maintenance_releases'), ('public', 'fleet_transfers'),
+    ('public', 'vehicle_fuel_consumption_stats'),
     ('storage', 'objects'), ('storage', 'buckets')
 ),
 relations as (
