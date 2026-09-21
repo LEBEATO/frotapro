@@ -18,6 +18,7 @@ import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
 import { Toast, type ToastType } from '@/components/Toast'
 import { AppShell } from '@/components/layout/AppShell'
+import { DashboardMotion } from '@/components/motion/DashboardMotion'
 
 type EntityType = 'driver' | 'vehicle'
 
@@ -216,8 +217,9 @@ export default function AdminTransfersPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6 sm:space-y-8">
-        <PageHeader
+      <DashboardMotion>
+        <div data-motion-header>
+          <PageHeader
           title="Transferências"
           description="Transfira motoristas e veículos entre bases com encerramento seguro das associações e histórico permanente."
           contextLabel="Gestão nacional"
@@ -227,7 +229,8 @@ export default function AdminTransfersPage() {
               Atualizar
             </Button>
           }
-        />
+          />
+        </div>
 
         {errorMessage && (
           <ErrorState title="Não foi possível continuar" message={errorMessage} />
@@ -237,7 +240,7 @@ export default function AdminTransfersPage() {
           <LoadingState message="Carregando transferências..." />
         ) : (
           <>
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6">
+            <section data-motion-panel className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6">
               <div className="mb-5 flex items-center gap-3">
                 <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-2.5 text-blue-400">
                   <ArrowRightLeft className="h-5 w-5" />
@@ -335,7 +338,7 @@ export default function AdminTransfersPage() {
               </div>
             </section>
 
-            <section className="space-y-4">
+            <section data-motion-panel className="space-y-4">
               <div className="flex items-center gap-2">
                 <History className="h-5 w-5 text-blue-400" />
                 <h2 className="font-semibold text-white">Histórico recente</h2>
@@ -391,7 +394,7 @@ export default function AdminTransfersPage() {
             </section>
           </>
         )}
-      </div>
+      </DashboardMotion>
 
       <ConfirmModal
         isOpen={confirmOpen}

@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 
 import { AppShell } from '@/components/layout/AppShell'
+import { DashboardMotion } from '@/components/motion/DashboardMotion'
 import { ConfirmModal } from '@/components/ConfirmModal'
 import { createClient } from '@/lib/supabase/client'
 import { driverVehicleAssignmentSchema } from '@/lib/schemas/driver-vehicle-assignment'
@@ -708,11 +709,11 @@ export default function ManagerDriversPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6 sm:space-y-8">
+      <DashboardMotion>
 
         {/* HEADER */}
 
-        <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <section data-motion-header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
 
           <div className="flex items-start gap-3">
 
@@ -753,7 +754,7 @@ export default function ManagerDriversPage() {
 
         {/* INDICADORES */}
 
-        <section className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+        <section data-motion-panel className="grid grid-cols-2 gap-4 lg:grid-cols-3">
 
           <StatCard
             label="Motoristas"
@@ -774,7 +775,7 @@ export default function ManagerDriversPage() {
 
         {/* BUSCA */}
 
-        <section className="flex flex-col gap-3 sm:flex-row">
+        <section data-motion-panel className="flex flex-col gap-3 sm:flex-row">
 
           <div className="relative flex-1">
 
@@ -1028,7 +1029,7 @@ export default function ManagerDriversPage() {
 
         )}
 
-      </div>
+      </DashboardMotion>
 
       {/* ===================================================
           MODAL DE ATRIBUIÇÃO
@@ -1233,7 +1234,7 @@ function StatCard({
   value: number
 }) {
   return (
-    <article className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
+    <article data-motion-card className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
 
       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
         {label}

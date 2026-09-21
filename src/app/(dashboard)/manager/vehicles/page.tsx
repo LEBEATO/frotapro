@@ -30,6 +30,7 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { getVehicleStatusAppearance } from '@/lib/status'
 import { Button } from '@/components/Button'
 import { AppShell } from '@/components/layout/AppShell'
+import { DashboardMotion } from '@/components/motion/DashboardMotion'
 import { createClient } from '@/lib/supabase/client'
 
 type VehicleRow = {
@@ -383,13 +384,14 @@ export default function ManagerVehiclesPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6 sm:space-y-8">
+      <DashboardMotion>
 
         {/* =================================================
             CABEÇALHO
         ================================================= */}
 
-        <PageHeader
+        <div data-motion-header>
+          <PageHeader
           title="Veículos da Base"
           description="Cadastre e acompanhe somente os veículos da sua unidade. O acesso aos veículos de outras bases permanece bloqueado."
           contextLabel={
@@ -426,14 +428,15 @@ export default function ManagerVehiclesPage() {
 
             </div>
           }
-        />
+          />
+        </div>
 
         {/* =================================================
             BASE
         ================================================= */}
 
         {branch && (
-          <section className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 sm:p-5">
+          <section data-motion-panel className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 sm:p-5">
 
             <div className="flex items-start gap-3">
 
@@ -471,7 +474,7 @@ export default function ManagerVehiclesPage() {
             INDICADORES
         ================================================= */}
 
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section data-motion-panel className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
 
           <StatCard
             variant="outlined"
@@ -702,7 +705,7 @@ export default function ManagerVehiclesPage() {
 
         )}
 
-      </div>
+      </DashboardMotion>
     </AppShell>
   )
 }

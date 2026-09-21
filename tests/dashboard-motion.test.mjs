@@ -31,3 +31,19 @@ test('dashboards marcam cabeçalho, cards e painéis para animação', async () 
     assert.match(source, /data-motion-panel/)
   }
 })
+
+test('módulos operacionais reutilizam o padrão de movimento', async () => {
+  const pages = await Promise.all([
+    '../src/app/(dashboard)/admin/transfers/page.tsx',
+    '../src/app/(dashboard)/admin/drivers/page.tsx',
+    '../src/app/(dashboard)/admin/vehicles/page.tsx',
+    '../src/app/(dashboard)/manager/drivers/page.tsx',
+    '../src/app/(dashboard)/manager/vehicles/page.tsx',
+  ].map((path) => readFile(new URL(path, import.meta.url), 'utf8')))
+
+  for (const source of pages) {
+    assert.match(source, /<DashboardMotion>/)
+    assert.match(source, /data-motion-header/)
+    assert.match(source, /data-motion-panel/)
+  }
+})

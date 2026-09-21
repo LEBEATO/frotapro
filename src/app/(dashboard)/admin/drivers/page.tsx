@@ -29,6 +29,7 @@ import { SearchInput } from '@/components/SearchInput'
 import { FilterButton } from '@/components/FilterButton'
 import { Button } from '@/components/Button'
 import { AppShell } from '@/components/layout/AppShell'
+import { DashboardMotion } from '@/components/motion/DashboardMotion'
 import { createClient } from '@/lib/supabase/client'
 
 // =====================================================
@@ -456,13 +457,14 @@ export default function AdminDriversPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6 sm:space-y-8">
+      <DashboardMotion>
 
         {/* =================================================
             CABEÇALHO
         ================================================= */}
 
-        <PageHeader
+        <div data-motion-header>
+          <PageHeader
           title="Motoristas"
           description="Acompanhe motoristas, bases, localização e veículos atualmente atribuídos em toda a operação."
           contextLabel="Administração global"
@@ -482,13 +484,14 @@ export default function AdminDriversPage() {
               Atualizar
             </Button>
           }
-        />
+          />
+        </div>
 
         {/* =================================================
             INDICADORES
         ================================================= */}
 
-        <section className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+        <section data-motion-panel className="grid grid-cols-2 gap-4 xl:grid-cols-5">
 
           <StatCard
             label="Motoristas"
@@ -526,7 +529,7 @@ export default function AdminDriversPage() {
             INFORMAÇÃO
         ================================================= */}
 
-        <section className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+        <section data-motion-panel className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
 
           <div className="flex items-start gap-3">
 
@@ -552,7 +555,7 @@ export default function AdminDriversPage() {
             BUSCA
         ================================================= */}
 
-        <section className="flex flex-col gap-3">
+        <section data-motion-panel className="flex flex-col gap-3">
 
           <div className="relative">
 
@@ -914,7 +917,7 @@ export default function AdminDriversPage() {
 
         )}
 
-      </div>
+      </DashboardMotion>
     </AppShell>
   )
 }

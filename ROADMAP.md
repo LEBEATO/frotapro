@@ -423,6 +423,8 @@ FASE 11 — Dashboard do gestor
 
 ✅ padrão corporativo de animações GSAP responsivo e com redução de movimento
 
+✅ animações reutilizadas em transferências, motoristas e veículos
+
 🟡 informações operacionais já iniciadas
 
 ⬜ total de veículos

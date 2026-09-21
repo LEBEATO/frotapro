@@ -34,6 +34,7 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { getVehicleStatusAppearance } from '@/lib/status'
 import { Button } from '@/components/Button'
 import { AppShell } from '@/components/layout/AppShell'
+import { DashboardMotion } from '@/components/motion/DashboardMotion'
 import { createClient } from '@/lib/supabase/client'
 
 type VehicleRow = {
@@ -420,13 +421,14 @@ export default function AdminVehiclesPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6 sm:space-y-8">
+      <DashboardMotion>
 
         {/* =================================================
             CABEÇALHO
         ================================================= */}
 
-        <PageHeader
+        <div data-motion-header>
+          <PageHeader
           title="Veículos"
           description="Acompanhe todos os veículos cadastrados pelas bases, seus motoristas, localização e situação operacional."
           contextLabel="Administração global"
@@ -447,13 +449,14 @@ export default function AdminVehiclesPage() {
               Atualizar
             </Button>
           }
-        />
+          />
+        </div>
 
         {/* =================================================
             INFORMAÇÃO DA REGRA
         ================================================= */}
 
-        <section className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 sm:p-5">
+        <section data-motion-panel className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 sm:p-5">
 
           <div className="flex items-start gap-3">
 
@@ -485,7 +488,7 @@ export default function AdminVehiclesPage() {
             INDICADORES
         ================================================= */}
 
-        <section className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <section data-motion-panel className="grid grid-cols-2 gap-4 xl:grid-cols-4">
 
           <StatCard
             variant="compact"
@@ -554,7 +557,7 @@ export default function AdminVehiclesPage() {
             LEGENDA
         ================================================= */}
 
-        <section className="grid gap-3 md:grid-cols-3">
+        <section data-motion-panel className="grid gap-3 md:grid-cols-3">
 
           <StatusInfo
             icon={Power}
@@ -941,7 +944,7 @@ export default function AdminVehiclesPage() {
 
         )}
 
-      </div>
+      </DashboardMotion>
     </AppShell>
   )
 }
