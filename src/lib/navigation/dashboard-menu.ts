@@ -5,6 +5,7 @@ import {
   Fuel,
   Gauge,
   MapPinned,
+  ArrowRightLeft,
   UserCog,
   Users,
   Wrench,
@@ -75,6 +76,11 @@ const adminMenu: DashboardMenu = {
       label: 'Manutenções',
       href: '/maintenance',
       icon: Wrench,
+    },
+    {
+      label: 'Transferências',
+      href: '/admin/transfers',
+      icon: ArrowRightLeft,
     },
   ],
 

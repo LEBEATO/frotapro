@@ -11,6 +11,11 @@ async function migrationSql() {
   return readFile(migrationUrl, 'utf8')
 }
 
+const actorIndexMigrationUrl = new URL(
+  '../supabase/migrations/20260921143008_add_fleet_transfer_actor_index.sql',
+  import.meta.url
+)
+
 test('transferências possuem histórico, RLS e escrita somente pela RPC', async () => {
   const sql = await migrationSql()
 
@@ -35,4 +40,11 @@ test('transferência encerra associação ativa e preserva rastreabilidade', asy
   assert.match(sql, /transferred_by/i)
   assert.match(sql, /p_expected_branch_id/i)
   assert.match(sql, /pg_advisory_xact_lock/i)
+})
+
+test('histórico indexa o usuário responsável', async () => {
+  const sql = await readFile(actorIndexMigrationUrl, 'utf8')
+
+  assert.match(sql, /fleet_transfers_transferred_by_idx/i)
+  assert.match(sql, /\(transferred_by, transferred_at desc\)/i)
 })

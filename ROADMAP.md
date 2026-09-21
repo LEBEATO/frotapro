@@ -395,13 +395,13 @@ FASE 9 — Manutenção
 
 FASE 10 — Transferências
 
-🟡 tabela/estrutura de histórico de transferências versionada; aplicação no banco real pendente
+✅ tabela/estrutura de histórico de transferências aplicada no banco real
 
-🟡 motorista entre bases implementado no código; aplicação e teste real pendentes
+✅ motorista entre bases
 
 ⬜ motorista entre estados
 
-🟡 veículo entre bases implementado no código; aplicação e teste real pendentes
+✅ veículo entre bases
 
 ⬜ motorista trocando de veículo
 
