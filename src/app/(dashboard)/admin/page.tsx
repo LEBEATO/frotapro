@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 
 import { AppShell } from '@/components/layout/AppShell'
+import { DashboardMotion } from '@/components/motion/DashboardMotion'
 import { createClient } from '@/lib/supabase/client'
 
 interface Vehicle {
@@ -120,11 +121,11 @@ export default function AdminDashboardPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6 sm:space-y-8">
+      <DashboardMotion>
 
         {/* CABEÇALHO */}
 
-        <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <section data-motion-header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-medium text-blue-400">
               Gestão nacional
@@ -189,7 +190,7 @@ export default function AdminDashboardPage() {
 
           {/* CHECKLISTS */}
 
-          <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/60 xl:col-span-2">
+          <div data-motion-panel className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/60 xl:col-span-2">
             <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-4 sm:px-6">
               <div>
                 <h2 className="font-semibold text-white">
@@ -267,7 +268,7 @@ export default function AdminDashboardPage() {
 
           {/* RESUMO */}
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 sm:p-6">
+          <div data-motion-panel className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 sm:p-6">
             <h2 className="font-semibold text-white">
               Saúde da frota
             </h2><p className="mt-1 text-xs leading-5 text-zinc-500">
@@ -302,7 +303,7 @@ export default function AdminDashboardPage() {
           </div>
 
         </section>
-      </div>
+      </DashboardMotion>
     </AppShell>
   )
 }
@@ -323,7 +324,7 @@ function DashboardCard({
   icon: Icon,
 }: DashboardCardProps) {
   return (
-    <article className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 transition hover:border-zinc-700 sm:p-6">
+    <article data-motion-card className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 transition hover:border-zinc-700 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">

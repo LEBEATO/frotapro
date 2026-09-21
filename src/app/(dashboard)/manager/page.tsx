@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 
 import { AppShell } from '@/components/layout/AppShell'
+import { DashboardMotion } from '@/components/motion/DashboardMotion'
 import { createClient } from '@/lib/supabase/client'
 
 // =====================================================
@@ -429,10 +430,10 @@ export default function ManagerPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6 sm:space-y-8">
+      <DashboardMotion>
         {/* HEADER */}
 
-        <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <section data-motion-header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-blue-400">
               Gestão da base
@@ -466,7 +467,7 @@ export default function ManagerPage() {
 
         {/* BASE */}
 
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 sm:p-6">
+        <section data-motion-panel className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 sm:p-6">
           <div className="flex items-start gap-4">
             <div className="rounded-xl bg-blue-500/10 p-3 text-blue-400">
               <Building2 className="h-6 w-6" />
@@ -536,7 +537,7 @@ export default function ManagerPage() {
 
         {/* ACESSOS RÁPIDOS */}
 
-        <section>
+        <section data-motion-panel>
           <div className="mb-4">
             <h2 className="text-lg font-bold text-white">
               Gestão da unidade
@@ -584,7 +585,7 @@ export default function ManagerPage() {
             />
           </div>
         </section>
-      </div>
+      </DashboardMotion>
     </AppShell>
   )
 }
@@ -603,7 +604,7 @@ function StatCard({
   icon: IconType
 }) {
   return (
-    <article className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
+    <article data-motion-card className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
@@ -641,6 +642,7 @@ function QuickAccessCard({
   return (
     <Link
       href={href}
+      data-motion-card
       className="group rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 transition hover:border-blue-500/40 hover:bg-zinc-900"
     >
       <div className="flex items-start gap-4">

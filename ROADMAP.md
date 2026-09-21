@@ -421,6 +421,8 @@ FASE 11 — Dashboard do gestor
 
 ✅ painel principal do gestor existente
 
+✅ padrão corporativo de animações GSAP responsivo e com redução de movimento
+
 🟡 informações operacionais já iniciadas
 
 ⬜ total de veículos
