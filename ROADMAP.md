@@ -1,5 +1,39 @@
 ROADMAP — FrotaPro V1
 
+Atualização de manutenção — 21/09/2026
+
+Esta seção registra o estado confirmado na `main` após revisão do código, das
+migrations e da auditoria de produção. Em caso de divergência com checkboxes
+históricos abaixo, este resumo e `AUDITORIA_PRODUCAO.md` são a referência.
+
+CONCLUÍDO E COMPROVADO:
+
+- RLS, isolamento entre motoristas e bases, acesso anônimo e escritas
+  cross-branch testados no banco real.
+- Assignments, checklist, abastecimento, manutenção e Storage privado
+  validados.
+- Rotas por papel e redirecionamentos internos protegidos.
+- Fluxos e cálculos de abastecimento, incluindo valores decimais, validados.
+- Status real de manutenção exibido nos checklists.
+- 18 testes automatizados existentes aprovados.
+- Migrations de segurança versionadas em `supabase/migrations`.
+- Next.js atualizado para 16.3.5 e dependências de imagem corrigidas após
+  auditoria de segurança.
+
+PRÓXIMAS PRIORIDADES:
+
+1. concluir testes manuais de autenticação, quatro papéis, responsividade,
+   acessibilidade, SMTP, variáveis e smoke test na Vercel;
+2. implementar transferências com histórico e auditoria;
+3. concluir edição, ativação e desativação de motoristas e veículos;
+4. permitir abertura direta de manutenção por motorista e gestor;
+5. concluir a visão nacional do `fleet_manager`;
+6. implementar audit log e alertas operacionais.
+
+Não repetir como pendentes as validações de S01-S05 já documentadas como
+aprovadas. Os checkboxes abaixo permanecem como detalhamento histórico e devem
+ser atualizados progressivamente durante cada nova etapa.
+
 Auditoria das etapas 17–20 — 08/09/2026
 
 Relatório e matrizes: AUDITORIA_PRODUCAO.md.
