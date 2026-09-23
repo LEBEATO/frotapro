@@ -706,6 +706,16 @@ export default function DriverPage() {
               }
             />
 
+            <QuickActionCard
+              href="/driver/maintenance"
+              icon={Wrench}
+              title="Registrar manutenção"
+              description="Informe a troca feita e a próxima quilometragem do veículo."
+              disabled={
+                !vehicle
+              }
+            />
+
           </div>
 
         </section>
