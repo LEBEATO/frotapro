@@ -19,6 +19,9 @@ CONCLUÍDO E COMPROVADO:
 - Migrations de segurança versionadas em `supabase/migrations`.
 - Next.js atualizado para 16.3.5 e dependências de imagem corrigidas após
   auditoria de segurança.
+- Plano de manutenção por quilometragem: motorista registra a manutenção
+  realizada e a próxima quilometragem; o histórico fica no veículo e alertas
+  aparecem para motorista e gestor ao vencer ou faltar até 1.000 km.
 
 PRÓXIMAS PRIORIDADES:
 
@@ -513,7 +516,7 @@ FASE 14 — Alertas
 
 ⬜ consumo fora do padrão
 
-⬜ quilometragem relevante
+✅ quilometragem relevante
 
 ⬜ problemas recorrentes
 
