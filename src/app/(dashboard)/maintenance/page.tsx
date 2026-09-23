@@ -10,6 +10,7 @@ import {
 import Link from 'next/link'
 
 import {
+  AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   Loader2,
@@ -28,6 +29,10 @@ import {
   type ToastType,
 } from '@/components/Toast'
 import { createClient } from '@/lib/supabase/client'
+import {
+  getMaintenanceScheduleStatus,
+  getMaintenanceServiceLabel,
+} from '@/lib/maintenance-plan'
 
 type Vehicle = {
   id: string
@@ -39,6 +44,20 @@ type Vehicle = {
   issues: string | null
   created_at: string | null
   updated_at: string | null
+}
+
+type MaintenanceSchedule = {
+  id: string
+  vehicle_id: string
+  service_type: string
+  next_due_mileage: number
+}
+
+type MileageAlert = MaintenanceSchedule & {
+  vehicle_plate: string
+  vehicle_model: string | null
+  vehicle_mileage: number
+  status: 'overdue' | 'due_soon'
 }
 
 // =====================================================
@@ -53,6 +72,9 @@ export default function ManagerMaintenancePage() {
 
   const [records, setRecords] =
     useState<MaintenanceView[]>([])
+
+  const [mileageAlerts, setMileageAlerts] =
+    useState<MileageAlert[]>([])
 
   const [loading, setLoading] =
     useState(true)
@@ -308,6 +330,11 @@ export default function ManagerMaintenancePage() {
               'Manutenção'
             )
 
+        let schedulesQuery =
+          supabase
+            .from('vehicle_maintenance_schedules')
+            .select('id, vehicle_id, service_type, next_due_mileage')
+
         // ================================================
         // 6. FILTRAR BASE PARA GESTOR
         // ================================================
@@ -327,6 +354,12 @@ export default function ManagerMaintenancePage() {
               'current_branch_id',
               branchId
             )
+
+          schedulesQuery =
+            schedulesQuery.eq(
+              'branch_id',
+              branchId
+            )
         }
 
         // ================================================
@@ -336,9 +369,11 @@ export default function ManagerMaintenancePage() {
         const [
           maintenanceResponse,
           maintenanceVehiclesResponse,
+          schedulesResponse,
         ] = await Promise.all([
           maintenanceQuery,
           maintenanceVehiclesQuery,
+          schedulesQuery,
         ])
 
         if (
@@ -377,6 +412,22 @@ export default function ManagerMaintenancePage() {
           return
         }
 
+        if (schedulesResponse.error) {
+          console.error(
+            'Erro ao buscar plano de manutenção:',
+            schedulesResponse.error
+          )
+
+          showToast(
+            `Erro ao buscar alertas de quilometragem: ${schedulesResponse.error.message}`,
+            'error'
+          )
+
+          setMileageAlerts([])
+
+          return
+        }
+
         const maintenance =
           (
             maintenanceResponse.data ??
@@ -388,6 +439,12 @@ export default function ManagerMaintenancePage() {
             maintenanceVehiclesResponse.data ??
             []
           ) as Vehicle[]
+
+        const schedules =
+          (
+            schedulesResponse.data ??
+            []
+          ) as MaintenanceSchedule[]
 
         // ================================================
         // 8. BUSCAR VEÍCULOS QUE ESTÃO NOS REGISTROS
@@ -404,11 +461,16 @@ export default function ManagerMaintenancePage() {
         const missingVehicleIds =
           Array.from(
             new Set(
-              maintenance
-                .map(
+              [
+                ...maintenance.map(
                   (item) =>
                     item.vehicle_id
-                )
+                ),
+                ...schedules.map(
+                  (schedule) =>
+                    schedule.vehicle_id
+                ),
+              ]
                 .filter(
                   (
                     id
@@ -505,6 +567,50 @@ export default function ManagerMaintenancePage() {
               ]
             )
           )
+
+        const alerts = schedules
+          .map((schedule) => {
+            const vehicle =
+              vehiclesById.get(
+                schedule.vehicle_id
+              )
+
+            if (!vehicle) {
+              return null
+            }
+
+            const status =
+              getMaintenanceScheduleStatus(
+                vehicle.mileage ?? 0,
+                schedule.next_due_mileage
+              )
+
+            if (status === 'up_to_date') {
+              return null
+            }
+
+            return {
+              ...schedule,
+              vehicle_plate: vehicle.plate,
+              vehicle_model: vehicle.model,
+              vehicle_mileage:
+                vehicle.mileage ?? 0,
+              status,
+            } satisfies MileageAlert
+          })
+          .filter(
+            (alert): alert is MileageAlert =>
+              alert !== null
+          )
+          .sort(
+            (first, second) =>
+              second.vehicle_mileage -
+              second.next_due_mileage -
+              (first.vehicle_mileage -
+                first.next_due_mileage)
+          )
+
+        setMileageAlerts(alerts)
 
         // ================================================
         // 10. NORMALIZAR REGISTROS REAIS
@@ -968,6 +1074,69 @@ export default function ManagerMaintenancePage() {
           pendingCount={pendingCount}
           inProgressCount={inProgressCount}
         />
+
+        {mileageAlerts.length > 0 && (
+          <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 sm:p-6">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+
+              <div className="min-w-0">
+                <h2 className="font-semibold text-amber-300">
+                  Alertas de manutenção por quilometragem
+                </h2>
+
+                <p className="mt-1 text-sm text-zinc-300">
+                  Estes veículos já atingiram ou estão a até 1.000 km da manutenção prevista.
+                </p>
+
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  {mileageAlerts.map(
+                    (alert) => (
+                      <article
+                        key={alert.id}
+                        className="rounded-xl border border-amber-500/20 bg-zinc-950/30 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-white">
+                              {alert.vehicle_plate}
+                              {alert.vehicle_model
+                                ? ` • ${alert.vehicle_model}`
+                                : ''}
+                            </p>
+
+                            <p className="mt-1 text-sm text-zinc-300">
+                              {getMaintenanceServiceLabel(
+                                alert.service_type
+                              )}
+                            </p>
+                          </div>
+
+                          <span className={[
+                            'rounded-full border px-2.5 py-1 text-xs font-semibold',
+                            alert.status === 'overdue'
+                              ? 'border-red-500/30 bg-red-500/10 text-red-300'
+                              : 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+                          ].join(' ')}>
+                            {alert.status === 'overdue'
+                              ? 'Vencida'
+                              : 'Próxima'}
+                          </span>
+                        </div>
+
+                        <p className="mt-3 text-xs text-zinc-400">
+                          Atual: {alert.vehicle_mileage.toLocaleString('pt-BR')} km
+                          {' • '}
+                          Prevista: {alert.next_due_mileage.toLocaleString('pt-BR')} km
+                        </p>
+                      </article>
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* =================================================
             INFORMAÇÃO

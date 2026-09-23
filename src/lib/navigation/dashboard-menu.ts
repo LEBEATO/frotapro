@@ -149,6 +149,11 @@ const driverMenu: DashboardMenu = {
       href: '/driver/fuel',
       icon: Fuel,
     },
+    {
+      label: 'Manutenções',
+      href: '/driver/maintenance',
+      icon: Wrench,
+    },
   ],
 
   system: [],
